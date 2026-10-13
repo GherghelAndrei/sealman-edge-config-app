@@ -84,13 +84,12 @@ describe("AssignEndpointDialog", () => {
     });
   });
 
-  it("same-type edit sends null for a field the user emptied", async () => {
+  it("same-type edit sends an emptied text field as an empty string", async () => {
     render(<AssignEndpointDialog open onOpenChange={() => {}} deviceId="d" existingEndpoint={EXISTING} onCreated={() => {}} />);
     await userEvent.clear(screen.getByDisplayValue("10.0.0.9"));
     await userEvent.click(screen.getByRole("button", { name: "Save Changes" }));
     const body = mocks.updateEndpoint.mock.calls[0][0].body;
     expect(body.type_id).toBeUndefined();
-    expect(body.endpoint_data.addr === null || body.endpoint_data.addr === "").toBe(true);
-    expect(Object.keys(body.endpoint_data)).toContain("addr");
+    expect(body.endpoint_data.addr).toBe("");
   });
 });
