@@ -64,4 +64,12 @@ describe("mergeEndpointsByIp", () => {
     expect(merged).toHaveLength(1);
     expect(merged[0].ports.map((p) => p.port).sort()).toEqual([80, 8080]);
   });
+
+  it("lists configured endpoints that share an IP as separate rows", () => {
+    const merged = mergeEndpointsByIp(
+      [endpoint({ endpoint_id: "a", ip: "10.0.0.1" })],
+      [endpoint({ endpoint_id: "b", ip: "10.0.0.1" })],
+    );
+    expect(merged).toHaveLength(2);
+  });
 });

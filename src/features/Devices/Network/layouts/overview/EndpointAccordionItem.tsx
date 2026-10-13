@@ -11,12 +11,12 @@ import AssignEndpointDialog from "./AssignEndpointDialog";
 import AssignServiceDialog from "./AssignServiceDialog";
 import BrowseDialog from "./BrowseDialog";
 import { endpointListKey, portListKey } from "./overviewMerge";
+import useGetEndpointTypes from "@/generated/edge-administration/hooks/endpoint_types/useGetEndpointTypes";
+import { endpointTitle, roleFieldKey, titleFieldKeys } from "./endpointDisplay";
 import { withPermissionRequiredTooltip } from "@/features/authorization/permissions/withPermissionRequiredTooltip";
 import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
 
 const GuardedButton = withPermissionRequiredTooltip(Button);
-
-const ALWAYS_SHOWN_ENDPOINT_FIELD_KEYS = new Set(["ip", "name"]);
 
 interface props {
   endpoint: MappedEndpoint;
@@ -33,15 +33,21 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
   // otherwise easy to mistake for a real, already-assigned endpoint (same icon/row styling), so
   // this needs its own visual highlight to make "still needs to be assigned" obvious at a glance.
   const needsAssignment = endpoint.source === "default";
-  // "name" is a regular resolved field (like "ip"), not a top-level property - only present once
-  // there's a real instance ("configured" source).
-  const name = endpoint.endpoint_data?.name?.value as string | undefined;
+  // Roles come from the endpoint's type: the `name`-role value is the title, and the `ip`/`name`
+  // role fields are shown in the title line rather than as extra info.
+  const { data: endpointTypes } = useGetEndpointTypes();
+  const mapping = endpointTypes?.find((t) => t.type_id === endpoint.type_id)?.mapping;
+  const nameKey = roleFieldKey(mapping, "name");
+  const nameValue = nameKey ? endpoint.endpoint_data?.[nameKey]?.value : undefined;
+  const hasName = typeof nameValue === "string" && nameValue.trim() !== "";
+  const title = endpointTitle({ typeLabel: endpoint.type_label, name: nameValue, ip: endpoint.ip });
+  const shownInTitle = titleFieldKeys(mapping);
 
   // Extra endpoint type fields to show next to the IP address - each field's own "Show in
   // endpoints list" toggle (set on the endpoint type's field definition, see FieldsEditor.tsx)
   // decides this, not a separate settings page.
   const extraEndpointInfo = Object.entries(endpoint.endpoint_data ?? {})
-    .filter(([key]) => !ALWAYS_SHOWN_ENDPOINT_FIELD_KEYS.has(key))
+    .filter(([key]) => !shownInTitle.has(key))
     .filter(([, resolved]) => resolved.field?.show_in_list)
     .map(([, resolved]) => (resolved.field ? formatMetadataValue(resolved.value, resolved.field) : null))
     .filter((value): value is string => Boolean(value));
@@ -65,7 +71,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                 <div className="text-left">
                   <div className="flex items-center gap-2">
                     <p className={isUnidentified ? "font-medium text-orange-600" : needsAssignment ? "font-medium text-amber-700" : "font-medium"}>
-                      {name ?? endpoint.type_label ?? "Unidentified"}
+                      {title}
                     </p>
                     {needsAssignment && (
                       <Badge variant="outline" className="text-amber-700 border-amber-400 bg-amber-100">
@@ -74,7 +80,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {endpoint.type_label && name ? `${endpoint.type_label} · ` : ""}
+                    {endpoint.type_label && hasName ? `${endpoint.type_label} · ` : ""}
                     {endpoint.ip}
                     {extraEndpointInfo.length > 0 ? ` · ${extraEndpointInfo.join(" · ")}` : ""}
                   </p>

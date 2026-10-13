@@ -17,6 +17,7 @@ import ConfirmDeleteDialog from "./ConfirmDeleteDialog";
 import ReassignEndpointDialog from "./ReassignEndpointDialog";
 import { withPermissionRequiredTooltip } from "@/features/authorization/permissions/withPermissionRequiredTooltip";
 import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
+import { endpointTitle, roleFieldKey } from "./endpointDisplay";
 
 const GuardedButton = withPermissionRequiredTooltip(Button);
 
@@ -36,6 +37,8 @@ export default function EndpointDetailsPage({ endpointId, onBack, onOpenServiceD
   const { deleteEndpoint, isPending: isDeleting } = useDeleteEndpoint();
 
   const type = (endpointTypes ?? []).find((t) => t.type_id === endpoint?.type_id);
+  const nameKey = roleFieldKey(type?.mapping, "name");
+  const ipKey = roleFieldKey(type?.mapping, "ip");
 
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [deletedKeys, setDeletedKeys] = useState<Set<string>>(new Set());
@@ -151,7 +154,11 @@ export default function EndpointDetailsPage({ endpointId, onBack, onOpenServiceD
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold leading-none tracking-tight">
-                {(values.name as string | undefined) || endpoint.type_label}
+                {endpointTitle({
+                  typeLabel: endpoint.type_label,
+                  name: nameKey ? values[nameKey] : undefined,
+                  ip: ipKey ? values[ipKey] : undefined,
+                })}
               </h2>
               <p className="text-sm text-muted-foreground mt-1.5">
                 {endpoint.type_label}

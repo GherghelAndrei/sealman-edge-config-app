@@ -22,11 +22,11 @@ function mergePorts(base: MappedPort[], preferred: MappedPort[]): MappedPort[] {
   return [...ports.values()];
 }
 
-// A host found by both the baseline and the custom scan is the same host, so scan results merge
-// by IP. Entries without an IP (configured endpoints with no `ip`-role value) can only be
-// matched by endpoint_id.
+// A host found by both the baseline and the custom scan is the same host. Configured endpoints
+// merge by endpoint_id (several can share an IP and are listed separately); only scan-only
+// entries, which have no endpoint_id, merge by IP.
 function scanMergeKey(endpoint: MappedEndpoint): string {
-  return endpoint.ip ? `ip:${endpoint.ip}` : endpointListKey(endpoint);
+  return endpointListKey(endpoint);
 }
 
 /**
