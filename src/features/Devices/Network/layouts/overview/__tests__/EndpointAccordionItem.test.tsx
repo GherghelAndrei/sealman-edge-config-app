@@ -54,6 +54,14 @@ describe("EndpointAccordionItem", () => {
     expect(screen.getByText(/192\.168\.9\.9/)).toBeInTheDocument();
   });
 
+  it("has no leading separator in the subtitle of an IP-less endpoint with extra info", () => {
+    renderItem({
+      endpoint_id: "e8", type_id: "sensor", type_label: "Sensor", status: "unknown", source: "configured", ports: [],
+      endpoint_data: { foo: { value: "bar", field: { ...STRING, label: "Foo" } } },
+    });
+    expect(screen.getByText(/bar/).textContent).toBe("bar");
+  });
+
   it("hides role fields from the extra info", () => {
     renderItem({
       endpoint_id: "e3", type_id: "plc", type_label: "PLC", ip: "10.0.0.3", status: "online", source: "configured", ports: [],

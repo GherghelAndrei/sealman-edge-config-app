@@ -81,9 +81,9 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {endpoint.type_label && hasName ? `${endpoint.type_label} · ` : ""}
-                    {endpoint.ip}
-                    {extraEndpointInfo.length > 0 ? ` · ${extraEndpointInfo.join(" · ")}` : ""}
+                    {[endpoint.type_label && hasName ? endpoint.type_label : "", endpoint.ip ?? "", ...extraEndpointInfo]
+                      .filter((part) => part !== "")
+                      .join(" · ")}
                   </p>
                 </div>
               </div>
