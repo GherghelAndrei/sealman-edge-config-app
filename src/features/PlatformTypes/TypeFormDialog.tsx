@@ -6,9 +6,11 @@ import FieldsEditor, {
   FieldDefinition,
   FieldRow,
   buildFieldsPayload,
+  buildMappingPayload,
   findDuplicateKeys,
   rowsFromFields,
 } from "./FieldsEditor";
+import type { RoleOption } from "./typeRoles";
 
 export interface BrowserKindOption {
   value: string;
@@ -29,15 +31,8 @@ export interface TypeFormResult {
   description: string | null;
   fields: Record<string, FieldDefinition | null>;
   browser_kind: string | null;
-}
-
-/** Describes the single built-in field (e.g. "ip" for endpoint types, "port" for service types)
- * every type of this kind automatically gets - the backend always enforces its key/type/required/
- * changeable, so the only thing shown here is a plain input for its default value. */
-export interface ReservedFieldConfig {
-  key: string;
-  label: string;
-  type: "string" | "integer";
+  /** The type's {field_key: role} mapping, or null for types without roles (device types). */
+  mapping: Record<string, string> | null;
 }
 
 interface TypeFormDialogProps {
@@ -56,13 +51,10 @@ interface TypeFormDialogProps {
    * db/sqlalchemy/device_type.py:_serialize_with_mirroring). Ignored while editing an existing
    * type, since `initial.fields` already reflects the current mirrored view in that case. */
   defaultFields?: Record<string, FieldDefinition>;
-  /** When set, this type always has a built-in field the backend injects automatically - shown
-   * here as a single plain "default value" input, not as a row in the Fields editor below. */
-  reservedField?: ReservedFieldConfig;
-  /** Field keys that are entirely backend-managed with nothing to configure (e.g. "name" on
-   * endpoint types) - never shown as a row in the Fields editor, and never included in what's
-   * submitted, so they can't be edited or deleted from here at all. */
-  hiddenFieldKeys?: string[];
+  /** Roles of the pre-filled `defaultFields` on a brand-new type ({field_key: role}). */
+  defaultMapping?: Record<string, string>;
+  /** When set, each field row gets a Role selector and the result carries `mapping`. */
+  roleOptions?: RoleOption[];
   /** When set, each field row gets a "Show in list" toggle controlling whether its value shows
    * as extra info in the endpoints list - only meaningful for endpoint types. */
   supportsListVisibility?: boolean;
@@ -77,8 +69,8 @@ export default function TypeFormDialog({
   isPending,
   browserKindOptions,
   defaultFields,
-  reservedField,
-  hiddenFieldKeys,
+  defaultMapping,
+  roleOptions,
   supportsListVisibility,
 }: TypeFormDialogProps) {
   const isEdit = Boolean(initial);
@@ -87,7 +79,6 @@ export default function TypeFormDialog({
   const [description, setDescription] = useState("");
   const [browserKind, setBrowserKind] = useState("");
   const [rows, setRows] = useState<FieldRow[]>([]);
-  const [reservedDefault, setReservedDefault] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,23 +86,16 @@ export default function TypeFormDialog({
     setLabel(initial?.label ?? "");
     setDescription(initial?.description ?? "");
     setBrowserKind(initial?.browser_kind ?? "");
-    const excludedKeys = new Set([reservedField?.key, ...(hiddenFieldKeys ?? [])].filter(Boolean));
-    const fieldsForRows =
-      initial && excludedKeys.size > 0
-        ? Object.fromEntries(Object.entries(initial.fields).filter(([key]) => !excludedKeys.has(key)))
-        : initial?.fields;
-    if (fieldsForRows) {
-      setRows(rowsFromFields(fieldsForRows));
+    if (initial) {
+      setRows(rowsFromFields(initial.fields, initial.mapping ?? {}));
     } else if (defaultFields && Object.keys(defaultFields).length > 0) {
-      setRows(rowsFromFields(defaultFields));
+      setRows(rowsFromFields(defaultFields, defaultMapping ?? {}));
     } else {
       // No pre-filled blank row - the user presses "Add field" to start defining one.
       setRows([]);
     }
-    const reservedCurrentDefault = reservedField ? initial?.fields[reservedField.key]?.default : null;
-    setReservedDefault(reservedCurrentDefault != null ? String(reservedCurrentDefault) : "");
     setError(null);
-  }, [isOpen, initial, defaultFields, reservedField, hiddenFieldKeys]);
+  }, [isOpen, initial, defaultFields, defaultMapping]);
 
   if (!isOpen) return null;
 
@@ -179,40 +163,8 @@ export default function TypeFormDialog({
       }
     }
 
-    let reservedDefaultValue: string | number | null = null;
-    if (reservedField) {
-      const trimmed = reservedDefault.trim();
-      if (trimmed) {
-        if (reservedField.type === "integer") {
-          if (!Number.isInteger(Number(trimmed))) {
-            setError(`"${reservedField.label}" default must be a whole number`);
-            return;
-          }
-          reservedDefaultValue = Number(trimmed);
-        } else {
-          reservedDefaultValue = trimmed;
-        }
-      }
-    }
-
     const originalKeys = Object.keys(initial?.fields ?? {});
     const fields = buildFieldsPayload(rows, originalKeys);
-    // Hidden fields are never rows, so buildFieldsPayload treats them as "removed" and would set
-    // them to null - drop them from the payload entirely instead, so the backend leaves them
-    // untouched (they're fully backend-managed, nothing here to submit for them).
-    for (const key of hiddenFieldKeys ?? []) {
-      delete fields[key];
-    }
-    if (reservedField) {
-      fields[reservedField.key] = {
-        type: reservedField.type,
-        label: reservedField.label,
-        required: true,
-        changeable: false,
-        show_in_list: false,
-        default: reservedDefaultValue,
-      };
-    }
 
     try {
       await onSubmit({
@@ -220,6 +172,7 @@ export default function TypeFormDialog({
         description: description.trim() || null,
         fields,
         browser_kind: browserKind || null,
+        mapping: roleOptions ? buildMappingPayload(rows) : null,
       });
       setError(null);
     } catch {
@@ -293,18 +246,6 @@ export default function TypeFormDialog({
             </Field>
           )}
 
-          {reservedField && (
-            <Field label={`${reservedField.label} (default)`}>
-              <input
-                type={reservedField.type === "integer" ? "number" : "text"}
-                placeholder="Optional default value"
-                value={reservedDefault}
-                onChange={(e) => setReservedDefault(e.target.value)}
-                className={inputClass}
-              />
-            </Field>
-          )}
-
           <div>
             <h3 className="text-sm font-semibold mb-2">Fields</h3>
             <FieldsEditor
@@ -312,6 +253,7 @@ export default function TypeFormDialog({
               onChange={setRows}
               duplicateKeys={duplicateKeys}
               showListVisibility={supportsListVisibility}
+              roleOptions={roleOptions}
             />
           </div>
 
