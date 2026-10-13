@@ -48,7 +48,8 @@ interface TypeFormDialogProps {
   /** When set, a brand-new type (not editing an existing one) starts with these fields
    * pre-populated instead of a single blank row - used so creating a device type shows the
    * default type's fields right away, since they'll apply to it regardless (see
-   * db/sqlalchemy/device_type.py:_serialize_with_mirroring). Ignored while editing an existing
+   * db/sqlalchemy/device_type.py:_serialize_with_mirroring), and to pre-fill a new endpoint or
+   * service type with its role fields. Ignored while editing an existing
    * type, since `initial.fields` already reflects the current mirrored view in that case. */
   defaultFields?: Record<string, FieldDefinition>;
   /** Roles of the pre-filled `defaultFields` on a brand-new type ({field_key: role}). */

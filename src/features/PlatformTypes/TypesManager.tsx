@@ -18,7 +18,8 @@ export interface TypesManagerProps {
   /** When set, the form lets this type be assigned one of these built-in browsers. */
   browserKindOptions?: BrowserKindOption[];
   /** When set, a brand-new type starts pre-populated with these fields instead of a blank row -
-   * used for Device Types, where the default type's fields always apply anyway. */
+   * used for Device Types (the default type's fields always apply anyway) and to pre-fill new
+   * endpoint/service types with their role fields. */
   defaultFields?: Record<string, FieldDefinition>;
   /** Roles of the pre-filled `defaultFields` on a brand-new type ({field_key: role}). */
   defaultMapping?: Record<string, string>;

@@ -31,7 +31,7 @@ interface props {
   deviceId: string;
   /** The live IP this endpoint is being assigned at, if any. Omitted for a manually-added
    * endpoint that isn't (yet) live/discovered on the network - in that case nothing is
-   * pre-filled or locked, and the admin fills in every field (including the built-in IP field)
+   * pre-filled or locked, and the admin fills in every field (including the field with the ip role)
    * by hand. */
   ip?: string;
   defaultTypeId?: string | null;
@@ -65,7 +65,7 @@ export default function AssignEndpointDialog({
   }, [selectedType, ip]);
   // Whether `values` currently reflects this endpoint's actual saved data (vs. just a fresh type's
   // default fills for a not-yet-created endpoint) - only in that case should a `changeable: false`
-  // field (like the built-in "ip" field) be locked, otherwise a type's own default IP would lock
+  // field (like the field with the ip role) be locked, otherwise a type's own default IP would lock
   // the field before the admin has had a chance to type in a real one.
   const isSameExistingType = existingEndpoint?.type_id === selectedType?.type_id;
 
