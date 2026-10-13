@@ -10,6 +10,7 @@ import { formatMetadataValue } from "@/features/PlatformTypes/FieldValueInput";
 import AssignEndpointDialog from "./AssignEndpointDialog";
 import AssignServiceDialog from "./AssignServiceDialog";
 import BrowseDialog from "./BrowseDialog";
+import { endpointListKey, portListKey } from "./overviewMerge";
 import { withPermissionRequiredTooltip } from "@/features/authorization/permissions/withPermissionRequiredTooltip";
 import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
 
@@ -50,7 +51,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
   const [browsingPort, setBrowsingPort] = useState<MappedPort | null>(null);
 
   return (
-    <AccordionItem value={endpoint.ip} className="last:border-b-0">
+    <AccordionItem value={endpointListKey(endpoint)} className="last:border-b-0">
       <div className={`flex items-center pr-4 ${needsAssignment ? "bg-amber-50" : ""}`}>
         <div className="flex-1">
           <AccordionTrigger className="px-4 hover:no-underline hover:bg-muted/40">
@@ -139,7 +140,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                 const serviceId = port.service_id;
                 return (
                 <TableRow
-                  key={port.port}
+                  key={portListKey(port)}
                   className={[portNeedsAssignment ? "bg-amber-50" : "", serviceId ? "cursor-pointer hover:bg-muted/40" : ""].join(" ")}
                   onClick={serviceId ? () => onOpenServiceDetails(serviceId) : undefined}
                 >
@@ -147,7 +148,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                     <EndpointStatus value={port.status} type="text" />
                   </TableCell>
                   <TableCell>
-                    <Port value={port.port.toString()} />
+                    <Port value={port.port != null ? port.port.toString() : "-"} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -208,7 +209,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
         open={assignEndpointOpen}
         onOpenChange={setAssignEndpointOpen}
         deviceId={deviceId}
-        ip={endpoint.ip}
+        ip={endpoint.ip ?? undefined}
         defaultTypeId={endpoint.source === "default" ? endpoint.type_id : null}
         onCreated={onCreated}
       />
@@ -218,19 +219,21 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
           open={assignPort !== null}
           onOpenChange={(open) => !open && setAssignPort(null)}
           endpointId={endpoint.endpoint_id}
-          port={assignPort.port}
+          port={assignPort.port ?? undefined}
           defaultTypeId={assignPort.source === "default" ? assignPort.type_id : null}
           onCreated={onCreated}
         />
       )}
 
-      <BrowseDialog
-        open={browsingPort !== null}
-        onOpenChange={(open) => !open && setBrowsingPort(null)}
-        kind={browsingPort?.browser_kind ?? null}
-        ip={endpoint.ip}
-        port={browsingPort?.port ?? 0}
-      />
+      {endpoint.ip && (
+        <BrowseDialog
+          open={browsingPort !== null}
+          onOpenChange={(open) => !open && setBrowsingPort(null)}
+          kind={browsingPort?.browser_kind ?? null}
+          ip={endpoint.ip}
+          port={browsingPort?.port ?? 0}
+        />
+      )}
     </AccordionItem>
   );
 }

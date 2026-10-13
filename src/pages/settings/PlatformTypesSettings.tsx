@@ -86,7 +86,7 @@ export default function PlatformTypesSettings() {
           supportsListVisibility
           cascadeDelete={{ instancesLabel: "endpoint" }}
           onCreate={async (body) => {
-            await postEndpointType(body);
+            await postEndpointType({ ...body, mapping: {} });
             await endpointTypesQuery.refetch();
           }}
           onUpdate={async (typeId, body) => {
@@ -109,7 +109,7 @@ export default function PlatformTypesSettings() {
           reservedField={{ key: "port", label: "Port", type: "integer" }}
           cascadeDelete={{ instancesLabel: "service" }}
           onCreate={async (body) => {
-            await postServiceType(body);
+            await postServiceType({ ...body, mapping: {} });
             await serviceTypesQuery.refetch();
           }}
           onUpdate={async (typeId, body) => {

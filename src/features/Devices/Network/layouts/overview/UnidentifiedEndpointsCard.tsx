@@ -2,6 +2,7 @@ import { CircleHelp } from "lucide-react";
 import { Accordion } from "@/components/ui/accordion";
 import EndpointAccordionItem from "./EndpointAccordionItem";
 import { MappedEndpoint } from "@/generated/edge-administration/hooks/network/usePostNetworkOverview";
+import { endpointListKey } from "./overviewMerge";
 
 interface props {
   endpoints: MappedEndpoint[];
@@ -30,7 +31,7 @@ export default function UnidentifiedEndpointsCard({ endpoints, deviceId, onEndpo
         <Accordion type="single" collapsible className="w-full">
           {endpoints.map((endpoint) => (
             <EndpointAccordionItem
-              key={endpoint.endpoint_id ?? endpoint.ip}
+              key={endpointListKey(endpoint)}
               endpoint={endpoint}
               deviceId={deviceId}
               onCreated={onEndpointCreated}

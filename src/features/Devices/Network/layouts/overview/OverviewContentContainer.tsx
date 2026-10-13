@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Centered } from "@/features/Devices/Network/components";
 import { useNetworkPageStore } from "@/features/Devices/Network/stores";
 import usePostDeviceNetworkDiscover, { ScanResult } from "@/generated/edge-administration/hooks/network/usePostDeviceNetworkDiscover";
-import usePostNetworkOverview, { MappedEndpoint, MappedPort, NetworkOverview } from "@/generated/edge-administration/hooks/network/usePostNetworkOverview";
+import usePostNetworkOverview, { NetworkOverview } from "@/generated/edge-administration/hooks/network/usePostNetworkOverview";
 import useGetNetworkScanPorts from "@/generated/edge-administration/hooks/network/useGetNetworkScanPorts";
 import useGetNetworkScanRange from "@/generated/edge-administration/hooks/network/useGetNetworkScanRange";
 import usePostDeviceScanPorts from "@/generated/edge-administration/hooks/network/usePostDeviceScanPorts";
@@ -17,6 +17,7 @@ import ScanNetworkDialog, { ScanNetworkRange } from "./ScanNetworkDialog";
 import AssignEndpointDialog from "./AssignEndpointDialog";
 import EndpointDetailsPage from "./EndpointDetailsPage";
 import ServiceDetailsPage from "./ServiceDetailsPage";
+import { mergeConfiguredEndpoints, mergeEndpointsByIp } from "./overviewMerge";
 
 const BACKGROUND_REFRESH_INTERVAL_MS = 3000;
 
@@ -46,56 +47,6 @@ function isIpInRange(ip: string, range: ScanNetworkRange): boolean {
 function excludeIpsCoveredByRanges(ips: string[], ranges: ScanNetworkRange[]): string[] {
   if (ranges.length === 0) return ips;
   return ips.filter((ip) => !ranges.some((range) => isIpInRange(ip, range)));
-}
-
-// `primary` (the recurring baseline scan) wins on endpoint-level metadata (status, source, etc.)
-// for IPs it also covers, since it's the freshest data. But its port list only ever reflects
-// `catalogPorts` - it doesn't know about the extra ports from the one-time custom scan (see
-// `extraEndpoints` below) - so ports are unioned per IP rather than letting the baseline endpoint
-// blot out the whole custom-scan endpoint. Within a shared port number, primary still wins.
-function mergeEndpointsByIp(primary: MappedEndpoint[], extras: MappedEndpoint[]): MappedEndpoint[] {
-  const byIp = new Map<string, MappedEndpoint>();
-  for (const endpoint of extras) byIp.set(endpoint.ip, endpoint);
-  for (const endpoint of primary) {
-    const extra = byIp.get(endpoint.ip);
-    if (!extra) {
-      byIp.set(endpoint.ip, endpoint);
-      continue;
-    }
-    const ports = new Map<number, MappedPort>();
-    for (const port of extra.ports) ports.set(port.port, port);
-    for (const port of endpoint.ports) ports.set(port.port, port);
-    byIp.set(endpoint.ip, { ...endpoint, ports: [...ports.values()] });
-  }
-  return [...byIp.values()];
-}
-
-// Same idea as `mergeEndpointsByIp`, but keyed by `endpoint_id` (falling back to `ip` only for
-// entries that genuinely have no id, e.g. a live "unidentified" host). Configured/DB-backed
-// endpoints - both the live scan's "configured" matches and the offline fallback below - always
-// carry a real, unique `endpoint_id`, unlike their `ip`: several distinct configured endpoints of
-// the same type can share the exact same (or an empty/default) IP, and deduping by IP alone would
-// wrongly collapse them into a single row.
-function endpointMergeKey(endpoint: MappedEndpoint): string {
-  return endpoint.endpoint_id ? `id:${endpoint.endpoint_id}` : `ip:${endpoint.ip}`;
-}
-
-function mergeConfiguredEndpoints(primary: MappedEndpoint[], configured: MappedEndpoint[]): MappedEndpoint[] {
-  const byKey = new Map<string, MappedEndpoint>();
-  for (const endpoint of configured) byKey.set(endpointMergeKey(endpoint), endpoint);
-  for (const endpoint of primary) {
-    const key = endpointMergeKey(endpoint);
-    const match = byKey.get(key);
-    if (!match) {
-      byKey.set(key, endpoint);
-      continue;
-    }
-    const ports = new Map<number, MappedPort>();
-    for (const port of match.ports) ports.set(port.port, port);
-    for (const port of endpoint.ports) ports.set(port.port, port);
-    byKey.set(key, { ...endpoint, ports: [...ports.values()] });
-  }
-  return [...byKey.values()];
 }
 
 // The live scan needs the device itself to be reachable (it's a direct method call through IoT
