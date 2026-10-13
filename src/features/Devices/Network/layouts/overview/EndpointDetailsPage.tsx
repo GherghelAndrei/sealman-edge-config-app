@@ -314,6 +314,7 @@ export default function EndpointDetailsPage({ endpointId, onBack, onOpenServiceD
           onOpenChange={setReassignOpen}
           endpointId={endpointId}
           currentTypeId={endpoint.type_id}
+          currentData={endpoint.endpoint_data}
           onReassigned={async () => {
             await refetch();
             onUpdated();

@@ -14,8 +14,8 @@ import { components } from "@/generated/edge-administration/types";
 import useGetEndpointTypes from "@/generated/edge-administration/hooks/endpoint_types/useGetEndpointTypes";
 import { usePostEndpoint } from "@/generated/edge-administration/hooks/endpoints/usePostEndpoint";
 import { useUpdateEndpoint } from "@/generated/edge-administration/hooks/endpoints/useUpdateEndpoint";
-import { useDeleteEndpoint } from "@/generated/edge-administration/hooks/endpoints/useDeleteEndpoint";
 import TypeFieldsForm from "./TypeFieldsForm";
+import { initialRetypeValues, nonEmptyValues } from "./retypeData";
 
 type ResolvedField = components["schemas"]["ResolvedField"];
 
@@ -51,8 +51,7 @@ export default function AssignEndpointDialog({
   const { data: endpointTypes } = useGetEndpointTypes();
   const { postEndpoint, isPending: isCreating } = usePostEndpoint();
   const { updateEndpoint, isPending: isUpdating } = useUpdateEndpoint();
-  const { deleteEndpoint, isPending: isDeleting } = useDeleteEndpoint();
-  const isPending = isCreating || isUpdating || isDeleting;
+  const isPending = isCreating || isUpdating;
   const isEdit = Boolean(existingEndpoint);
 
   const [typeId, setTypeId] = useState("");
@@ -81,18 +80,18 @@ export default function AssignEndpointDialog({
       setValues({});
       return;
     }
-    const initial: Record<string, unknown> = {};
-    for (const [key, definition] of Object.entries(selectedType.fields)) {
-      if (key === ipFieldKey && ip) {
-        initial[key] = ip;
-      } else if (isSameExistingType) {
-        initial[key] = existingEndpoint?.endpoint_data[key]?.value ?? definition.default ?? null;
-      } else {
-        initial[key] = definition.default ?? null;
-      }
+    // An existing endpoint (same type or a retype) starts from its stored values for every
+    // matching key; a new endpoint starts from the type's defaults.
+    const initial: Record<string, unknown> = existingEndpoint
+      ? initialRetypeValues(selectedType.fields, existingEndpoint.endpoint_data)
+      : Object.fromEntries(
+          Object.entries(selectedType.fields).map(([key, definition]) => [key, definition.default ?? null])
+        );
+    if (ipFieldKey && ip) {
+      initial[ipFieldKey] = ip;
     }
     setValues(initial);
-  }, [selectedType, ipFieldKey, ip, existingEndpoint, isSameExistingType]);
+  }, [selectedType, ipFieldKey, ip, existingEndpoint]);
 
   const handleSubmit = async () => {
     if (!selectedType) {
@@ -106,23 +105,26 @@ export default function AssignEndpointDialog({
     }
     setError(null);
     try {
-      if (existingEndpoint && existingEndpoint.type_id === selectedType.type_id) {
+      if (existingEndpoint) {
+        const isRetype = existingEndpoint.type_id !== selectedType.type_id;
+        // A retype is a PATCH with the new type_id: the API merges onto the stored data, so the
+        // endpoint keeps its services and every value. Empty fields are left out because null
+        // would delete the stored value.
         await updateEndpoint({
           endpointId: existingEndpoint.endpoint_id,
-          body: { endpoint_data: values },
+          body: isRetype
+            ? { type_id: selectedType.type_id, endpoint_data: nonEmptyValues(values) }
+            : { endpoint_data: values },
         });
-        toast.success(`Endpoint "${selectedType.label}" updated`);
+        toast.success(
+          isRetype ? `Endpoint reassigned to "${selectedType.label}"` : `Endpoint "${selectedType.label}" updated`
+        );
       } else {
-        if (existingEndpoint) {
-          await deleteEndpoint(existingEndpoint.endpoint_id);
-        }
         await postEndpoint({
           deviceId,
           body: { type_id: selectedType.type_id, endpoint_data: values },
         });
-        toast.success(
-          `Endpoint "${selectedType.label}" ${existingEndpoint ? "reassigned" : "created"}${ip ? ` for ${ip}` : ""}`
-        );
+        toast.success(`Endpoint "${selectedType.label}" created${ip ? ` for ${ip}` : ""}`);
       }
       onCreated();
       onOpenChange(false);
