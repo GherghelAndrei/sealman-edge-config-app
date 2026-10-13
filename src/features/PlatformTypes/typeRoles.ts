@@ -4,14 +4,16 @@ import type { FieldDefinition } from "./FieldsEditor";
 export interface RoleOption {
   value: string;
   label: string;
+  /** The field type a field must have to carry this role (the API rejects other types). */
+  fieldType: FieldDefinition["type"];
 }
 
 export const ENDPOINT_ROLE_OPTIONS: RoleOption[] = [
-  { value: "ip", label: "IP" },
-  { value: "name", label: "Name" },
+  { value: "ip", label: "IP", fieldType: "string" },
+  { value: "name", label: "Name", fieldType: "string" },
 ];
 
-export const SERVICE_ROLE_OPTIONS: RoleOption[] = [{ value: "port", label: "Port" }];
+export const SERVICE_ROLE_OPTIONS: RoleOption[] = [{ value: "port", label: "Port", fieldType: "integer" }];
 
 // UI defaults for a new type (the API adds no fields). All removable, none required.
 export const ENDPOINT_TYPE_DEFAULT_FIELDS: Record<string, FieldDefinition> = {

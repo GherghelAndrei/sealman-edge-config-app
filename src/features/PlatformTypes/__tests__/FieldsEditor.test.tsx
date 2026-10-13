@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import FieldsEditor, { FieldDefinition, buildMappingPayload, rowsFromFields } from "../FieldsEditor";
-import { ENDPOINT_ROLE_OPTIONS } from "../typeRoles";
+import FieldsEditor, { FieldDefinition, FieldRow, buildMappingPayload, rowsFromFields } from "../FieldsEditor";
+import { ENDPOINT_ROLE_OPTIONS, SERVICE_ROLE_OPTIONS } from "../typeRoles";
 
 function stringField(label: string): FieldDefinition {
   return { type: "string", label, required: false, ui: "input", default: null, changeable: true, show_in_list: true };
@@ -60,5 +61,59 @@ describe("FieldsEditor role selector", () => {
     render(<FieldsEditor rows={rowsFromFields({ addr: stringField("A") }, { addr: "ip" })} onChange={onChange} roleOptions={ENDPOINT_ROLE_OPTIONS} />);
     await userEvent.selectOptions(screen.getByLabelText("Role of field addr"), "");
     expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ key: "addr", role: null })]);
+  });
+
+  it("disables roles whose field type differs from the row's type", () => {
+    const rows = rowsFromFields({ count: { ...stringField("C"), type: "integer", ui: "number" }, addr: stringField("A") });
+    const { rerender } = render(<FieldsEditor rows={rows} onChange={() => {}} roleOptions={ENDPOINT_ROLE_OPTIONS} />);
+    const intRole = screen.getByLabelText("Role of field count");
+    expect(within(intRole).getByRole("option", { name: "IP" })).toBeDisabled();
+    expect(within(intRole).getByRole("option", { name: "Name" })).toBeDisabled();
+    rerender(<FieldsEditor rows={rows} onChange={() => {}} roleOptions={SERVICE_ROLE_OPTIONS} />);
+    expect(within(screen.getByLabelText("Role of field addr")).getByRole("option", { name: "Port" })).toBeDisabled();
+    expect(within(screen.getByLabelText("Role of field count")).getByRole("option", { name: "Port" })).not.toBeDisabled();
+  });
+
+  it("disables the selector while the key is empty", () => {
+    const rows = rowsFromFields({ a: stringField("A") });
+    rows[0] = { ...rows[0], key: "  " };
+    render(<FieldsEditor rows={rows} onChange={() => {}} roleOptions={ENDPOINT_ROLE_OPTIONS} />);
+    expect(screen.getByLabelText("Role of field")).toBeDisabled();
+  });
+
+  it("clears the role when the field type changes to one that does not fit", async () => {
+    // jsdom lacks these; Radix Select needs them to open
+    Element.prototype.hasPointerCapture ??= () => false;
+    Element.prototype.setPointerCapture ??= () => {};
+    Element.prototype.releasePointerCapture ??= () => {};
+    Element.prototype.scrollIntoView ??= () => {};
+    const onChange = vi.fn();
+    render(<FieldsEditor rows={rowsFromFields({ addr: stringField("A") }, { addr: "ip" })} onChange={onChange} roleOptions={ENDPOINT_ROLE_OPTIONS} />);
+    const typeTrigger = screen.getAllByRole("combobox").find((el) => el.tagName === "BUTTON")!;
+    await userEvent.click(typeTrigger);
+    await userEvent.click(await screen.findByRole("option", { name: /integer/i }));
+    expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ key: "addr", role: null })]);
+  });
+
+  it("carries the role to a key renamed through the key input", async () => {
+    const latest: { rows: FieldRow[] } = { rows: [] };
+    function Harness() {
+      const [rows, setRows] = useState(() => rowsFromFields({ addr: stringField("A") }, { addr: "ip" }));
+      return (
+        <FieldsEditor
+          rows={rows}
+          onChange={(next) => {
+            latest.rows = next;
+            setRows(next);
+          }}
+          roleOptions={ENDPOINT_ROLE_OPTIONS}
+        />
+      );
+    }
+    render(<Harness />);
+    const keyInput = screen.getByPlaceholderText("field_key");
+    await userEvent.clear(keyInput);
+    await userEvent.type(keyInput, "host");
+    expect(buildMappingPayload(latest.rows)).toEqual({ host: "ip" });
   });
 });

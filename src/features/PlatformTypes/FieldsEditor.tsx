@@ -244,6 +244,8 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
       // and the backend forbids `validation` entirely for type=boolean.
       definition: { ...row.definition, type, ui, options: null, default: null, validation: null },
       optionsText: "",
+      // a role needs a specific field type; drop it when the new type no longer fits
+      role: roleOptions?.find((o) => o.value === row.role)?.fieldType === type ? row.role : null,
     });
   };
 
@@ -412,6 +414,8 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                   <select
                     aria-label={`Role of field ${trimmedKey}`}
                     value={row.role ?? ""}
+                    disabled={trimmedKey === ""}
+                    title={trimmedKey === "" ? "Enter a field key first" : undefined}
                     onChange={(e) => updateRow(row.id, { role: e.target.value || null })}
                     className="h-8 rounded-md border border-slate-200 bg-muted/30 px-2 text-xs"
                   >
@@ -420,7 +424,10 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                       <option
                         key={opt.value}
                         value={opt.value}
-                        disabled={rows.some((other) => other.id !== row.id && other.role === opt.value)}
+                        disabled={
+                          opt.fieldType !== row.definition.type ||
+                          rows.some((other) => other.id !== row.id && other.role === opt.value)
+                        }
                       >
                         {opt.label}
                       </option>
