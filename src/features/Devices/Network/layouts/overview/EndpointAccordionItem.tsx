@@ -10,6 +10,7 @@ import { formatMetadataValue } from "@/features/PlatformTypes/FieldValueInput";
 import AssignEndpointDialog from "./AssignEndpointDialog";
 import AssignServiceDialog from "./AssignServiceDialog";
 import BrowseDialog from "./BrowseDialog";
+import { resolveBrowseTarget } from "@/lib/browserRegistry";
 import { endpointListKey, portListKey } from "./overviewMerge";
 import useGetEndpointTypes from "@/generated/edge-administration/hooks/endpoint_types/useGetEndpointTypes";
 import { endpointTitle, roleFieldKey, titleFieldKeys } from "./endpointDisplay";
@@ -54,7 +55,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
 
   const [assignEndpointOpen, setAssignEndpointOpen] = useState(false);
   const [assignPort, setAssignPort] = useState<MappedPort | null>(null);
-  const [browsingPort, setBrowsingPort] = useState<MappedPort | null>(null);
+  const [browsing, setBrowsing] = useState<{ kind: string; ip: string; port: number } | null>(null);
 
   return (
     <AccordionItem value={endpointListKey(endpoint)} className="last:border-b-0">
@@ -187,20 +188,25 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                           Assign
                         </GuardedButton>
                       )}
-                      {port.browser_kind && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={port.status !== "online"}
-                          title={port.status !== "online" ? "Only available while the service is online" : undefined}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBrowsingPort(port);
-                          }}
-                        >
-                          Browse
-                        </Button>
-                      )}
+                      {(() => {
+                        const target = resolveBrowseTarget(endpoint.ip, port.port);
+                        const kind = port.browser_kind;
+                        if (!kind || !target) return null;
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={port.status !== "online"}
+                            title={port.status !== "online" ? "Only available while the service is online" : undefined}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBrowsing({ kind, ...target });
+                            }}
+                          >
+                            Browse
+                          </Button>
+                        );
+                      })()}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -231,13 +237,13 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
         />
       )}
 
-      {endpoint.ip && (
+      {browsing && (
         <BrowseDialog
-          open={browsingPort !== null}
-          onOpenChange={(open) => !open && setBrowsingPort(null)}
-          kind={browsingPort?.browser_kind ?? null}
-          ip={endpoint.ip}
-          port={browsingPort?.port ?? 0}
+          open
+          onOpenChange={(open) => !open && setBrowsing(null)}
+          kind={browsing.kind}
+          ip={browsing.ip}
+          port={browsing.port}
         />
       )}
     </AccordionItem>

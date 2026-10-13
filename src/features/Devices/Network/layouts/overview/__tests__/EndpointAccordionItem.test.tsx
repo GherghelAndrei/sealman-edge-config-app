@@ -73,4 +73,28 @@ describe("EndpointAccordionItem", () => {
     expect(screen.getByText("Unknown")).toBeInTheDocument();
     expect(screen.getByText("Modbus")).toBeInTheDocument();
   });
+
+  it("shows Browse for a service with a browser, an ip and a port", () => {
+    renderItem({
+      endpoint_id: "e5", type_id: "sensor", type_label: "Sensor", ip: "10.0.0.5", status: "online", source: "configured", endpoint_data: {},
+      ports: [{ port: 4840, status: "online", source: "configured", service_id: "s5", type_label: "OPC UA", browser_kind: "opcua" }],
+    });
+    expect(screen.getByRole("button", { name: "Browse" })).toBeInTheDocument();
+  });
+
+  it("shows no Browse without an ip", () => {
+    renderItem({
+      endpoint_id: "e6", type_id: "sensor", type_label: "Sensor", status: "unknown", source: "configured", endpoint_data: {},
+      ports: [{ port: 4840, status: "unknown", source: "configured", service_id: "s6", type_label: "OPC UA", browser_kind: "opcua" }],
+    });
+    expect(screen.queryByRole("button", { name: "Browse" })).not.toBeInTheDocument();
+  });
+
+  it("shows no Browse without a port", () => {
+    renderItem({
+      endpoint_id: "e7", type_id: "sensor", type_label: "Sensor", ip: "10.0.0.7", status: "online", source: "configured", endpoint_data: {},
+      ports: [{ status: "unknown", source: "configured", service_id: "s7", type_label: "OPC UA", browser_kind: "opcua" }],
+    });
+    expect(screen.queryByRole("button", { name: "Browse" })).not.toBeInTheDocument();
+  });
 });
