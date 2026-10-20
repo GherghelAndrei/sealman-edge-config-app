@@ -104,8 +104,9 @@ export default function PlatformTypesSettings() {
           roleOptions={ENDPOINT_ROLE_OPTIONS}
           supportsListVisibility
           cascadeDelete={{ instancesLabel: "endpoint" }}
+          extensionFieldSets={enabledFieldSets}
           onCreate={async (body) => {
-            await postEndpointType({ ...body, mapping: body.mapping ?? {}, extension_fields: {} });
+            await postEndpointType({ ...body, mapping: body.mapping ?? {}, extension_fields: body.extension_fields ?? {} });
             await endpointTypesQuery.refetch();
           }}
           onUpdate={async (typeId, body) => {

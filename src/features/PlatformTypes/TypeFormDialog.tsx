@@ -11,6 +11,8 @@ import FieldsEditor, {
   rowsFromFields,
 } from "./FieldsEditor";
 import type { RoleOption } from "./typeRoles";
+import ExtensionFieldsPicker from "./ExtensionFieldsPicker";
+import type { ExtensionFieldSet } from "@/generated/edge-administration/hooks/extension_fields/useGetExtensionFields";
 
 export interface BrowserKindOption {
   value: string;
@@ -35,6 +37,8 @@ export interface TypeFormResult {
   browser_kind: string | null;
   /** The type's {field_key: role} mapping, or null for types without roles (device types). */
   mapping: Record<string, string> | null;
+  /** Ticked extension fields as {extension: [keys]}; only set when at least one is ticked. */
+  extension_fields?: Record<string, string[]>;
 }
 
 interface TypeFormDialogProps {
@@ -61,7 +65,12 @@ interface TypeFormDialogProps {
   /** When set, each field row gets a "Show in list" toggle controlling whether its value shows
    * as extra info in the endpoints list - only meaningful for endpoint types. */
   supportsListVisibility?: boolean;
+  /** When set, creating a type offers these extensions' fields as checkboxes, all unchecked.
+   * Pass enabled extensions only. */
+  extensionFieldSets?: ExtensionFieldSet[];
 }
+
+const NO_EXCLUDED_KEYS = new Set<string>();
 
 export default function TypeFormDialog({
   isOpen,
@@ -75,6 +84,7 @@ export default function TypeFormDialog({
   defaultMapping,
   roleOptions,
   supportsListVisibility,
+  extensionFieldSets,
 }: TypeFormDialogProps) {
   const isEdit = Boolean(initial);
 
@@ -83,6 +93,7 @@ export default function TypeFormDialog({
   const [browserKind, setBrowserKind] = useState("");
   const [rows, setRows] = useState<FieldRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [extensionFields, setExtensionFields] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!isOpen) return;
@@ -97,6 +108,7 @@ export default function TypeFormDialog({
       // No pre-filled blank row - the user presses "Add field" to start defining one.
       setRows([]);
     }
+    setExtensionFields({});
     setError(null);
   }, [isOpen, initial, defaultFields, defaultMapping]);
 
@@ -166,6 +178,17 @@ export default function TypeFormDialog({
       }
     }
 
+    const offersExtensionFields = !isEdit && extensionFieldSets !== undefined;
+    const tickedExtensionFields = offersExtensionFields ? extensionFields : {};
+    const rowKeys = new Set(rows.map((row) => row.key.trim()));
+    for (const keys of Object.values(tickedExtensionFields)) {
+      const clash = keys.find((key) => rowKeys.has(key));
+      if (clash) {
+        setError(`Field "${clash}" is also selected as an extension field`);
+        return;
+      }
+    }
+
     const originalKeys = Object.keys(initial?.fields ?? {});
     const fields = buildFieldsPayload(rows, originalKeys);
 
@@ -176,6 +199,7 @@ export default function TypeFormDialog({
         fields,
         browser_kind: browserKind || null,
         mapping: roleOptions ? buildMappingPayload(rows) : null,
+        ...(Object.keys(tickedExtensionFields).length > 0 ? { extension_fields: tickedExtensionFields } : {}),
       });
       setError(null);
     } catch {
@@ -259,6 +283,15 @@ export default function TypeFormDialog({
               roleOptions={roleOptions}
             />
           </div>
+
+          {!isEdit && extensionFieldSets && (
+            <ExtensionFieldsPicker
+              fieldSets={extensionFieldSets}
+              excludeKeys={NO_EXCLUDED_KEYS}
+              value={extensionFields}
+              onChange={setExtensionFields}
+            />
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>

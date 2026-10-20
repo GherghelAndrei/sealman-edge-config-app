@@ -8,6 +8,7 @@ import { ApiError } from "@/generated/edge-administration/api";
 import TypeFormDialog, { BrowserKindOption, TypeFormResult, TypeRecord } from "./TypeFormDialog";
 import { FieldDefinition } from "./FieldsEditor";
 import type { RoleOption } from "./typeRoles";
+import type { ExtensionFieldSet } from "@/generated/edge-administration/hooks/extension_fields/useGetExtensionFields";
 
 export interface TypesManagerProps {
   title: string;
@@ -31,6 +32,8 @@ export interface TypesManagerProps {
   /** Type ID that can't be deleted (its delete button is hidden entirely) - used for the
    * "default" device type, which the backend also rejects deleting. */
   protectedTypeId?: string;
+  /** When set, the create form offers these extensions' fields (endpoint types only). */
+  extensionFieldSets?: ExtensionFieldSet[];
   /**
    * When set, deleting a type is a cascading delete that also removes every instance of it
    * (e.g. every endpoint of an endpoint type) - `instancesLabel` is the singular noun for one
@@ -47,6 +50,7 @@ export interface TypesManagerProps {
     fields: Record<string, FieldDefinition>;
     browser_kind?: string | null;
     mapping?: Record<string, string>;
+    extension_fields?: Record<string, string[]>;
   }) => Promise<unknown>;
   onUpdate: (
     typeId: string,
@@ -79,6 +83,7 @@ export default function TypesManager({
   roleOptions,
   supportsListVisibility,
   protectedTypeId,
+  extensionFieldSets,
   cascadeDelete,
   onCreate,
   onUpdate,
@@ -122,6 +127,7 @@ export default function TypesManager({
           fields: nonNullFields(result.fields),
           ...(browserKindOptions ? { browser_kind: result.browser_kind } : {}),
           ...(roleOptions ? { mapping: result.mapping ?? {} } : {}),
+          ...(result.extension_fields ? { extension_fields: result.extension_fields } : {}),
         });
         toast.success(`${singularLabel} "${result.label}" created`);
       }
@@ -244,6 +250,7 @@ export default function TypesManager({
         defaultMapping={defaultMapping}
         roleOptions={roleOptions}
         supportsListVisibility={supportsListVisibility}
+        extensionFieldSets={extensionFieldSets}
       />
 
       <SimpleDialog

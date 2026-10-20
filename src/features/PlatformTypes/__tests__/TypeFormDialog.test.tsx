@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TypeFormDialog, { TypeRecord } from "../TypeFormDialog";
+import ExtensionFieldsPicker from "../ExtensionFieldsPicker";
+import type { ExtensionFieldSet } from "@/generated/edge-administration/hooks/extension_fields/useGetExtensionFields";
 import type { FieldDefinition } from "../FieldsEditor";
 import {
   ENDPOINT_ROLE_OPTIONS,
@@ -167,5 +169,131 @@ describe("TypeFormDialog roles", () => {
     await userEvent.type(screen.getByPlaceholderText("Human readable name"), "Gateway");
     await userEvent.click(screen.getByRole("button", { name: "Add device type" }));
     expect(onSubmit.mock.calls[0][0].mapping).toBeNull();
+  });
+});
+
+const inventoryFieldSet: ExtensionFieldSet = {
+  extension: "inventory",
+  enabled: true,
+  fields: {
+    serial_number: { type: "string", label: "Serial number", required: false, changeable: true, show_in_list: false },
+    asset_tag: { type: "integer", label: "Asset tag", required: false, changeable: true, show_in_list: false },
+  },
+  applied: { serial_number: [], asset_tag: [] },
+};
+
+const monitoringFieldSet: ExtensionFieldSet = {
+  extension: "monitoring",
+  enabled: true,
+  fields: {
+    poll_interval: { type: "integer", label: "Poll interval", required: false, changeable: true, show_in_list: false },
+  },
+  applied: { poll_interval: [] },
+};
+
+function renderEndpointCreateWithExtensions(defaultFields: Record<string, FieldDefinition> = ENDPOINT_TYPE_DEFAULT_FIELDS) {
+  const onSubmit = vi.fn().mockResolvedValue(undefined);
+  render(
+    <TypeFormDialog
+      isOpen
+      onClose={() => {}}
+      onSubmit={onSubmit}
+      singularLabel="Endpoint Type"
+      defaultFields={defaultFields}
+      defaultMapping={ENDPOINT_TYPE_DEFAULT_MAPPING}
+      roleOptions={ENDPOINT_ROLE_OPTIONS}
+      supportsListVisibility
+      extensionFieldSets={[inventoryFieldSet, monitoringFieldSet]}
+    />
+  );
+  return onSubmit;
+}
+
+describe("TypeFormDialog extension fields on create", () => {
+  it("create shows an Extension fields section with every field unchecked", () => {
+    renderEndpointCreateWithExtensions();
+    expect(screen.getByText("Extension fields")).toBeInTheDocument();
+    expect(screen.getByText("inventory")).toBeInTheDocument();
+    expect(screen.getByText("monitoring")).toBeInTheDocument();
+    expect(screen.getByLabelText("Serial number (serial_number)")).not.toBeChecked();
+    expect(screen.getByLabelText("Asset tag (asset_tag)")).not.toBeChecked();
+    expect(screen.getByLabelText("Poll interval (poll_interval)")).not.toBeChecked();
+  });
+
+  it("checking a field sends extension_fields grouped by extension", async () => {
+    const onSubmit = renderEndpointCreateWithExtensions();
+    await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
+    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
+    expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ inventory: ["serial_number"] });
+  });
+
+  it("omits an extension whose fields were checked and then unchecked", async () => {
+    const onSubmit = renderEndpointCreateWithExtensions();
+    await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
+    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
+    await userEvent.click(screen.getByLabelText("Poll interval (poll_interval)"));
+    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
+    await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
+    expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ monitoring: ["poll_interval"] });
+  });
+
+  it("sends no extension_fields when nothing is checked", async () => {
+    const onSubmit = renderEndpointCreateWithExtensions();
+    await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
+    await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("extension_fields");
+  });
+
+  it("blocks save when a checked key is also a row key", async () => {
+    const onSubmit = renderEndpointCreateWithExtensions({ ...ENDPOINT_TYPE_DEFAULT_FIELDS, serial_number: stringField("Serial") });
+    await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
+    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
+    expect(screen.getByText('Field "serial_number" is also selected as an extension field')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("shows no Extension fields section without field sets", () => {
+    renderEndpointCreate();
+    expect(screen.queryByText("Extension fields")).not.toBeInTheDocument();
+  });
+});
+
+describe("ExtensionFieldsPicker", () => {
+  it("hides excluded keys and an extension left with none", () => {
+    render(
+      <ExtensionFieldsPicker
+        fieldSets={[inventoryFieldSet, monitoringFieldSet]}
+        excludeKeys={new Set(["serial_number", "poll_interval"])}
+        value={{}}
+        onChange={() => {}}
+      />
+    );
+    expect(screen.queryByLabelText("Serial number (serial_number)")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Asset tag (asset_tag)")).toBeInTheDocument();
+    expect(screen.queryByText("monitoring")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing when no field is left to offer", () => {
+    const { container } = render(
+      <ExtensionFieldsPicker fieldSets={[monitoringFieldSet]} excludeKeys={new Set(["poll_interval"])} value={{}} onChange={() => {}} />
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("reports ticked keys in declaration order and drops an extension with none", async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <ExtensionFieldsPicker fieldSets={[inventoryFieldSet]} excludeKeys={new Set()} value={{ inventory: ["asset_tag"] }} onChange={onChange} />
+    );
+    expect(screen.getByLabelText("Asset tag (asset_tag)")).toBeChecked();
+    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    expect(onChange).toHaveBeenLastCalledWith({ inventory: ["serial_number", "asset_tag"] });
+    rerender(
+      <ExtensionFieldsPicker fieldSets={[inventoryFieldSet]} excludeKeys={new Set()} value={{ inventory: ["asset_tag"] }} onChange={onChange} />
+    );
+    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
+    expect(onChange).toHaveBeenLastCalledWith({});
   });
 });
