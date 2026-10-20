@@ -3,6 +3,7 @@ import { CheckCircleIcon, PlusIcon, TrashIcon, XCircleIcon } from "@heroicons/re
 import { components } from "@/generated/edge-administration/types";
 import FieldValueInput, { compactInputClass, validateFieldValue } from "./FieldValueInput";
 import Toggle from "./Toggle";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { RoleOption } from "./typeRoles";
 
@@ -22,6 +23,9 @@ export interface FieldRow {
   optionsText: string;
   /** The role this field carries on its type (e.g. "ip"), or null. */
   role: string | null;
+  /** The extension that manages this field on its type, or null. A managed field's definition is
+   * locked except label, description and show_in_list, and it never has a role. */
+  managedBy: string | null;
 }
 
 const UI_OPTIONS_BY_TYPE: Record<FieldType, { value: FieldUi; label: string }[]> = {
@@ -62,6 +66,7 @@ export function emptyFieldRow(): FieldRow {
     },
     optionsText: "",
     role: null,
+    managedBy: null,
   };
 }
 
@@ -74,16 +79,22 @@ function parseOptions(text: string): string[] {
 
 export function rowsFromFields(
   fields: Record<string, FieldDefinition>,
-  mapping: Record<string, string> = {}
+  mapping: Record<string, string> = {},
+  managedBy: Record<string, string> = {}
 ): FieldRow[] {
-  return Object.entries(fields).map(([key, definition]) => ({
-    id: crypto.randomUUID(),
-    originalKey: key,
-    key,
-    definition,
-    optionsText: (definition.options ?? []).join(", "),
-    role: mapping[key] ?? null,
-  }));
+  return Object.entries(fields).map(([key, definition]) => {
+    const manager = managedBy[key] ?? null;
+    return {
+      id: crypto.randomUUID(),
+      originalKey: key,
+      key,
+      definition,
+      optionsText: (definition.options ?? []).join(", "),
+      // a managed field never has a role
+      role: manager ? null : (mapping[key] ?? null),
+      managedBy: manager,
+    };
+  });
 }
 
 export function findDuplicateKeys(rows: FieldRow[]): Set<string> {
@@ -292,6 +303,8 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
         const trimmedKey = row.key.trim();
         const isDuplicate = duplicateKeys?.has(trimmedKey.toLowerCase()) && trimmedKey !== "";
         const showValidation = expandedValidation.has(row.id);
+        // a managed (extension) field: only label, description and show_in_list can change
+        const locked = row.managedBy !== null;
 
         return (
           <div key={row.id} className="border rounded-md p-3 space-y-3 bg-background hover:bg-muted/20 transition-colors">
@@ -302,10 +315,16 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                     type="text"
                     placeholder="field_key"
                     value={row.key}
+                    disabled={locked}
                     onChange={(e) => updateRow(row.id, { key: e.target.value })}
                     className={`${compactInputClass} font-mono ${isDuplicate ? "border-destructive focus:border-destructive" : ""}`}
                   />
                   {isDuplicate && <p className="text-xs text-destructive mt-1">Duplicate key</p>}
+                  {locked && (
+                    <Badge variant="secondary" className="mt-1" title="Only label, description and show in list can be changed">
+                      from {row.managedBy}
+                    </Badge>
+                  )}
                 </Field>
               </div>
 
@@ -323,7 +342,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
 
               <div className="col-span-2">
                 <Field label="Type">
-                  <Select value={row.definition.type} onValueChange={(v) => handleTypeChange(row, v as FieldType)}>
+                  <Select value={row.definition.type} disabled={locked} onValueChange={(v) => handleTypeChange(row, v as FieldType)}>
                     <SelectTrigger className="h-8">
                       <SelectValue />
                     </SelectTrigger>
@@ -341,6 +360,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                 <Field label="Widget">
                   <Select
                     value={ui}
+                    disabled={locked}
                     onValueChange={(v) =>
                       updateDefinition(row.id, { ui: v as FieldUi, options: null, default: null })
                     }
@@ -380,6 +400,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                 <Toggle
                   checked={row.definition.required}
                   onChange={(val) => updateDefinition(row.id, { required: val })}
+                  disabled={locked}
                 />
                 Required
               </label>
@@ -391,6 +412,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                 <Toggle
                   checked={row.definition.changeable !== false}
                   onChange={(val) => updateDefinition(row.id, { changeable: val })}
+                  disabled={locked}
                 />
                 Changeable
               </label>
@@ -413,9 +435,15 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                   Role
                   <select
                     aria-label={`Role of field ${trimmedKey}`}
-                    value={row.role ?? ""}
-                    disabled={trimmedKey === ""}
-                    title={trimmedKey === "" ? "Enter a field key first" : undefined}
+                    value={locked ? "" : (row.role ?? "")}
+                    disabled={locked || trimmedKey === ""}
+                    title={
+                      locked
+                        ? "A field managed by an extension cannot have a role"
+                        : trimmedKey === ""
+                          ? "Enter a field key first"
+                          : undefined
+                    }
                     onChange={(e) => updateRow(row.id, { role: e.target.value || null })}
                     className="h-8 rounded-md border border-slate-200 bg-muted/30 px-2 text-xs"
                   >
@@ -457,6 +485,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                       type="text"
                       placeholder="option1, option2, option3"
                       value={row.optionsText}
+                      disabled={locked}
                       onChange={(e) => handleOptionsTextChange(row, e.target.value)}
                       className={compactInputClass}
                     />
@@ -470,6 +499,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                     definition={row.definition}
                     value={row.definition.default}
                     onChange={(value) => updateDefinition(row.id, { default: value })}
+                    disabled={locked}
                   />
                 </Field>
               </div>
@@ -490,6 +520,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                           type="text"
                           placeholder="e.g. ^[A-Z]{2}\d{4}$"
                           value={row.definition.validation?.pattern ?? ""}
+                          disabled={locked}
                           onChange={(e) => updateValidation(row.id, { pattern: e.target.value || null })}
                           className={`${compactInputClass} font-mono`}
                         />
@@ -501,6 +532,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                           type="number"
                           min={0}
                           value={row.definition.validation?.min_length ?? ""}
+                          disabled={locked}
                           onChange={(e) =>
                             updateValidation(row.id, { min_length: e.target.value === "" ? null : Number(e.target.value) })
                           }
@@ -514,6 +546,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                           type="number"
                           min={0}
                           value={row.definition.validation?.max_length ?? ""}
+                          disabled={locked}
                           onChange={(e) =>
                             updateValidation(row.id, { max_length: e.target.value === "" ? null : Number(e.target.value) })
                           }
@@ -531,6 +564,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                         <input
                           type="number"
                           value={row.definition.validation?.minimum ?? ""}
+                          disabled={locked}
                           onChange={(e) =>
                             updateValidation(row.id, { minimum: e.target.value === "" ? null : Number(e.target.value) })
                           }
@@ -543,6 +577,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                         <input
                           type="number"
                           value={row.definition.validation?.maximum ?? ""}
+                          disabled={locked}
                           onChange={(e) =>
                             updateValidation(row.id, { maximum: e.target.value === "" ? null : Number(e.target.value) })
                           }
@@ -557,6 +592,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                           min={0}
                           step="any"
                           value={row.definition.validation?.multiple_of ?? ""}
+                          disabled={locked}
                           onChange={(e) =>
                             updateValidation(row.id, { multiple_of: e.target.value === "" ? null : Number(e.target.value) })
                           }
@@ -568,6 +604,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                       <Toggle
                         checked={row.definition.validation?.exclusive_minimum ?? false}
                         onChange={(val) => updateValidation(row.id, { exclusive_minimum: val })}
+                        disabled={locked}
                       />
                       Exclusive min
                     </label>
@@ -575,6 +612,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                       <Toggle
                         checked={row.definition.validation?.exclusive_maximum ?? false}
                         onChange={(val) => updateValidation(row.id, { exclusive_maximum: val })}
+                        disabled={locked}
                       />
                       Exclusive max
                     </label>

@@ -23,6 +23,8 @@ export interface TypeRecord {
   description: string | null;
   fields: Record<string, FieldDefinition>;
   mapping?: Record<string, string>;
+  /** {field_key: extension} for fields managed by an extension (endpoint types only). */
+  managed_by?: Record<string, string>;
   browser_kind?: string | null;
 }
 
@@ -88,7 +90,7 @@ export default function TypeFormDialog({
     setDescription(initial?.description ?? "");
     setBrowserKind(initial?.browser_kind ?? "");
     if (initial) {
-      setRows(rowsFromFields(initial.fields, initial.mapping ?? {}));
+      setRows(rowsFromFields(initial.fields, initial.mapping ?? {}, initial.managed_by ?? {}));
     } else if (defaultFields && Object.keys(defaultFields).length > 0) {
       setRows(rowsFromFields(defaultFields, defaultMapping ?? {}));
     } else {

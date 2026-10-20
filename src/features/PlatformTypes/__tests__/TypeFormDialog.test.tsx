@@ -107,6 +107,26 @@ describe("TypeFormDialog roles", () => {
     expect(onSubmit.mock.calls[0][0].mapping).toEqual({ title: "name" });
   });
 
+  it("edit with a managed field sends null for a removed managed field and no mapping entry for it", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const record: TypeRecord = {
+      type_id: "t1",
+      label: "T",
+      description: null,
+      fields: { ip: stringField("IP"), serial_number: stringField("Serial") },
+      mapping: { ip: "ip" },
+      managed_by: { serial_number: "inventory" },
+    };
+    render(<TypeFormDialog isOpen onClose={() => {}} onSubmit={onSubmit} initial={record} singularLabel="Endpoint Type" roleOptions={ENDPOINT_ROLE_OPTIONS} />);
+    expect(screen.getByText("from inventory")).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Remove field" })[1]);
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const result = onSubmit.mock.calls[0][0];
+    expect(result.fields.serial_number).toBeNull();
+    expect(result.fields.ip).toMatchObject({ label: "IP" });
+    expect(result.mapping).toEqual({ ip: "ip" });
+  });
+
   it("has no role selector and no mapping without roleOptions", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(<TypeFormDialog isOpen onClose={() => {}} onSubmit={onSubmit} singularLabel="Device Type" defaultFields={{ serial: stringField("Serial") }} />);
