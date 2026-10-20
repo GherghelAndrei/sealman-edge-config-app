@@ -25,11 +25,11 @@ export default function ExtensionFieldsPicker({ fieldSets, excludeKeys, value, o
 
   if (offered.length === 0) return null;
 
+  // Built with entries, not by assigning keys, so an extension named e.g. "__proto__" or
+  // "constructor" is handled like any other name.
   const toggle = (extension: string, offeredKeys: string[]) => {
-    const next = { ...value };
-    if (extension in value) delete next[extension];
-    else next[extension] = offeredKeys;
-    onChange(next);
+    const others = Object.entries(value).filter(([name]) => name !== extension);
+    onChange(Object.fromEntries(Object.hasOwn(value, extension) ? others : [...others, [extension, offeredKeys]]));
   };
 
   return (
@@ -40,7 +40,7 @@ export default function ExtensionFieldsPicker({ fieldSets, excludeKeys, value, o
           <ExtensionRow
             key={set.extension}
             fieldSet={set}
-            checked={set.extension in value}
+            checked={Object.hasOwn(value, set.extension)}
             onToggle={() => toggle(set.extension, set.fields.map(([key]) => key))}
           />
         ))}
@@ -64,6 +64,7 @@ function ExtensionRow({ fieldSet, checked, onToggle }: { fieldSet: OfferedFieldS
         </label>
         <button
           type="button"
+          aria-label={`Show ${extension} fields`}
           aria-expanded={isExpanded}
           aria-controls={listId}
           onClick={() => setIsExpanded((open) => !open)}
@@ -76,16 +77,14 @@ function ExtensionRow({ fieldSet, checked, onToggle }: { fieldSet: OfferedFieldS
           />
         </button>
       </div>
-      {isExpanded && (
-        <ul id={listId} aria-label={`${extension} fields`} className="px-4 pb-3 space-y-1 text-sm">
-          {fields.map(([key, definition]) => (
-            <li key={key} className="flex items-baseline gap-3">
-              <span className="font-medium">{definition.label}</span>
-              <span className="font-mono text-xs text-muted-foreground">{key}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul id={listId} hidden={!isExpanded} aria-label={`${extension} fields`} className="px-4 pb-3 space-y-1 text-sm">
+        {fields.map(([key, definition]) => (
+          <li key={key} className="flex items-baseline gap-3">
+            <span className="font-medium">{definition.label}</span>
+            <span className="font-mono text-xs text-muted-foreground">{key}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

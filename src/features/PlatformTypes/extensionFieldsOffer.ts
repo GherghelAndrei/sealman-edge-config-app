@@ -28,10 +28,11 @@ export function filterOfferedSelection(
   excludeKeys: Set<string>
 ): Record<string, string[]> {
   const offered = new Map(offeredFieldSets(fieldSets, excludeKeys).map((set) => [set.extension, set.fields]));
-  const result: Record<string, string[]> = {};
-  for (const extension of Object.keys(selection)) {
-    const fields = offered.get(extension);
-    if (fields) result[extension] = fields.map(([key]) => key);
-  }
-  return result;
+  // Built with entries, not by assigning keys, so an extension named e.g. "__proto__" is kept.
+  return Object.fromEntries(
+    Object.keys(selection).flatMap((extension) => {
+      const fields = offered.get(extension);
+      return fields ? [[extension, fields.map(([key]) => key)]] : [];
+    })
+  );
 }

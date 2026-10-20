@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TypeFormDialog, { TypeRecord } from "../TypeFormDialog";
 import ExtensionFieldsPicker from "../ExtensionFieldsPicker";
+import { filterOfferedSelection } from "../extensionFieldsOffer";
 import type { ExtensionFieldSet } from "@/generated/edge-administration/hooks/extension_fields/useGetExtensionFields";
 import type { FieldDefinition } from "../FieldsEditor";
 import {
@@ -285,7 +286,7 @@ function extensionCheckbox(name: string) {
 }
 
 function showFieldsButton(extension: string) {
-  return within(screen.getByRole("group", { name: extension })).getByRole("button", { name: "Show fields" });
+  return within(screen.getByRole("group", { name: extension })).getByRole("button", { name: `Show ${extension} fields` });
 }
 
 describe("TypeFormDialog extension fields on create", () => {
@@ -297,7 +298,8 @@ describe("TypeFormDialog extension fields on create", () => {
     expect(extensionCheckbox("monitoring 1 field(s)")).not.toBeChecked();
     expect(showFieldsButton("inventory")).toHaveAttribute("aria-expanded", "false");
     expect(showFieldsButton("monitoring")).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("serial_number")).not.toBeInTheDocument();
+    expect(screen.getByText("serial_number")).not.toBeVisible();
+    expect(screen.queryByRole("list", { name: "inventory fields" })).not.toBeInTheDocument();
     // No per-field checkboxes anymore.
     expect(screen.queryByRole("checkbox", { name: /serial_number/ })).not.toBeInTheDocument();
   });
@@ -357,6 +359,56 @@ describe("ExtensionFieldsPicker", () => {
     await userEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("list", { name: "inventory fields" })).not.toBeInTheDocument();
+    // The collapsed list stays in the DOM (hidden), so aria-controls always points at it.
+    const controlled = document.getElementById(toggle.getAttribute("aria-controls")!);
+    expect(controlled).not.toBeNull();
+    expect(controlled).not.toBeVisible();
+  });
+
+  it("gives each Show fields toggle a distinct accessible name", () => {
+    render(
+      <ExtensionFieldsPicker fieldSets={[inventoryFieldSet, monitoringFieldSet]} excludeKeys={new Set()} value={{}} onChange={() => {}} />
+    );
+    expect(screen.getByRole("button", { name: "Show inventory fields" })).toHaveTextContent("Show fields");
+    expect(screen.getByRole("button", { name: "Show monitoring fields" })).toHaveTextContent("Show fields");
+  });
+
+  it.each(["constructor", "__proto__", "toString"])(
+    "handles an extension named %s like any other name",
+    async (name) => {
+      const fieldSet: ExtensionFieldSet = { ...monitoringFieldSet, extension: name };
+      const onChange = vi.fn();
+      const { rerender } = render(
+        <ExtensionFieldsPicker fieldSets={[fieldSet]} excludeKeys={new Set()} value={{}} onChange={onChange} />
+      );
+      expect(extensionCheckbox(`${name} 1 field(s)`)).not.toBeChecked();
+      await userEvent.click(extensionCheckbox(`${name} 1 field(s)`));
+      const ticked = onChange.mock.lastCall![0];
+      expect(Object.hasOwn(ticked, name)).toBe(true);
+      expect(Object.entries(ticked)).toEqual([[name, ["poll_interval"]]]);
+      rerender(<ExtensionFieldsPicker fieldSets={[fieldSet]} excludeKeys={new Set()} value={ticked} onChange={onChange} />);
+      expect(extensionCheckbox(`${name} 1 field(s)`)).toBeChecked();
+      await userEvent.click(extensionCheckbox(`${name} 1 field(s)`));
+      expect(Object.entries(onChange.mock.lastCall![0])).toEqual([]);
+    }
+  );
+});
+
+describe("filterOfferedSelection", () => {
+  it("keeps a ticked extension named __proto__ or constructor as an own key", () => {
+    const sets = [
+      { ...monitoringFieldSet, extension: "__proto__" },
+      { ...inventoryFieldSet, extension: "constructor" },
+    ];
+    const selection = Object.fromEntries([
+      ["__proto__", ["poll_interval"]],
+      ["constructor", ["serial_number"]],
+    ]);
+    const result = filterOfferedSelection(selection, sets, new Set());
+    expect(Object.entries(result)).toEqual([
+      ["__proto__", ["poll_interval"]],
+      ["constructor", ["serial_number", "asset_tag"]],
+    ]);
   });
 
   it("counts and lists only the keys not excluded, and hides an extension left with none", async () => {
