@@ -107,6 +107,39 @@ describe("TypeFormDialog roles", () => {
     expect(onSubmit.mock.calls[0][0].mapping).toEqual({ title: "name" });
   });
 
+  it("edit with a managed field sends its definition back unchanged except a new label", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const managed: FieldDefinition = {
+      type: "string",
+      label: "Serial",
+      description: "From the inventory",
+      required: false,
+      ui: "select",
+      options: ["A100", "B200"],
+      validation: { pattern: "^[A-Z]\\d{3}$", min_length: 4, max_length: 4, minimum: null, maximum: null, multiple_of: null, exclusive_minimum: false, exclusive_maximum: false },
+      default: "A100",
+      changeable: false,
+      show_in_list: true,
+    };
+    const record: TypeRecord = {
+      type_id: "t1",
+      label: "T",
+      description: null,
+      fields: { ip: stringField("IP"), serial_number: managed },
+      mapping: { ip: "ip" },
+      managed_by: { serial_number: "inventory" },
+    };
+    render(<TypeFormDialog isOpen onClose={() => {}} onSubmit={onSubmit} initial={record} singularLabel="Endpoint Type" roleOptions={ENDPOINT_ROLE_OPTIONS} />);
+    const labelInput = screen.getByDisplayValue("Serial");
+    await userEvent.clear(labelInput);
+    await userEvent.type(labelInput, "Serial number");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const result = onSubmit.mock.calls[0][0];
+    expect(result.fields.serial_number).toEqual({ ...managed, label: "Serial number" });
+    expect(result.mapping).toEqual({ ip: "ip" });
+    expect(result.mapping).not.toHaveProperty("serial_number");
+  });
+
   it("edit with a managed field sends null for a removed managed field and no mapping entry for it", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const record: TypeRecord = {
