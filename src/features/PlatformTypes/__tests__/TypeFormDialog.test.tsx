@@ -297,3 +297,110 @@ describe("ExtensionFieldsPicker", () => {
     expect(onChange).toHaveBeenLastCalledWith({});
   });
 });
+
+const plcRecord: TypeRecord = {
+  type_id: "t-plc",
+  label: "PLC",
+  description: null,
+  fields: { ip: stringField("IP"), serial_number: stringField("Serial") },
+  mapping: { ip: "ip" },
+};
+
+function renderEndpointEditWithExtensions(
+  record: TypeRecord = plcRecord,
+  fieldSets: ExtensionFieldSet[] = [inventoryFieldSet, monitoringFieldSet]
+) {
+  const onSubmit = vi.fn().mockResolvedValue(undefined);
+  const props = {
+    onClose: () => {},
+    onSubmit,
+    initial: record,
+    singularLabel: "Endpoint Type",
+    roleOptions: ENDPOINT_ROLE_OPTIONS,
+    supportsListVisibility: true,
+  };
+  const view = render(<TypeFormDialog isOpen {...props} extensionFieldSets={fieldSets} />);
+  return { onSubmit, view, props };
+}
+
+describe("TypeFormDialog extension fields on edit", () => {
+  it("edit lists only enabled-extension fields whose key is not on the type, all unchecked", () => {
+    renderEndpointEditWithExtensions();
+    expect(screen.getByText("Extension fields")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Serial number (serial_number)")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Asset tag (asset_tag)")).not.toBeChecked();
+    expect(screen.getByLabelText("Poll interval (poll_interval)")).not.toBeChecked();
+  });
+
+  it("Save sends the field edits and the ticked extension_fields in one onSubmit result", async () => {
+    const record: TypeRecord = { ...plcRecord, fields: { ip: stringField("Host") } };
+    const { onSubmit } = renderEndpointEditWithExtensions(record);
+    const labelInput = screen.getByDisplayValue("Host");
+    await userEvent.clear(labelInput);
+    await userEvent.type(labelInput, "Address");
+    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const result = onSubmit.mock.calls[0][0];
+    expect(result.fields.ip).toMatchObject({ label: "Address" });
+    expect(result.extension_fields).toEqual({ inventory: ["serial_number"] });
+  });
+
+  it("Save without ticks sends no extension_fields", async () => {
+    const { onSubmit } = renderEndpointEditWithExtensions();
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("extension_fields");
+  });
+
+  it("blocks save when a ticked key is also a new row key", async () => {
+    const { onSubmit } = renderEndpointEditWithExtensions();
+    await userEvent.click(screen.getByLabelText("Poll interval (poll_interval)"));
+    await userEvent.click(screen.getByRole("button", { name: "Add field" }));
+    const keyInputs = screen.getAllByPlaceholderText("field_key");
+    await userEvent.type(keyInputs[keyInputs.length - 1], "poll_interval");
+    const labelInputs = screen.getAllByPlaceholderText("Human readable label");
+    await userEvent.type(labelInputs[labelInputs.length - 1], "Poll");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(screen.getByText('Field "poll_interval" is also selected as an extension field')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("resets the ticked fields when the dialog is reopened", async () => {
+    const { view, props } = renderEndpointEditWithExtensions();
+    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
+    view.rerender(<TypeFormDialog isOpen={false} {...props} extensionFieldSets={[inventoryFieldSet, monitoringFieldSet]} />);
+    view.rerender(<TypeFormDialog isOpen {...props} extensionFieldSets={[inventoryFieldSet, monitoringFieldSet]} />);
+    expect(screen.getByLabelText("Asset tag (asset_tag)")).not.toBeChecked();
+  });
+});
+
+describe("TypeFormDialog drops stale extension field ticks", () => {
+  it("does not send a ticked field whose extension is no longer offered (edit)", async () => {
+    const { onSubmit, view, props } = renderEndpointEditWithExtensions();
+    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
+    await userEvent.click(screen.getByLabelText("Poll interval (poll_interval)"));
+    // A refetch while the dialog is open disables "inventory".
+    view.rerender(<TypeFormDialog isOpen {...props} extensionFieldSets={[monitoringFieldSet]} />);
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ monitoring: ["poll_interval"] });
+  });
+
+  it("ignores a stale ticked key on create, including for the clash check", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const props = {
+      onClose: () => {},
+      onSubmit,
+      singularLabel: "Endpoint Type",
+      defaultFields: { ...ENDPOINT_TYPE_DEFAULT_FIELDS, serial_number: stringField("Serial") },
+      defaultMapping: ENDPOINT_TYPE_DEFAULT_MAPPING,
+      roleOptions: ENDPOINT_ROLE_OPTIONS,
+    };
+    const { rerender } = render(<TypeFormDialog isOpen {...props} extensionFieldSets={[inventoryFieldSet]} />);
+    await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
+    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    rerender(<TypeFormDialog isOpen {...props} extensionFieldSets={[{ ...inventoryFieldSet, enabled: false }]} />);
+    await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("extension_fields");
+  });
+});

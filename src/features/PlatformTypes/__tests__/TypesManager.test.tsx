@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TypesManager from "../TypesManager";
+import type { TypeRecord } from "../TypeFormDialog";
 import type { ExtensionFieldSet } from "@/generated/edge-administration/hooks/extension_fields/useGetExtensionFields";
 import { ENDPOINT_ROLE_OPTIONS, ENDPOINT_TYPE_DEFAULT_FIELDS, ENDPOINT_TYPE_DEFAULT_MAPPING } from "../typeRoles";
 
@@ -87,5 +88,53 @@ describe("TypesManager extension fields", () => {
     const onCreate = renderEndpointManager();
     await submitCreate(false);
     expect(onCreate.mock.calls[0][0]).not.toHaveProperty("extension_fields");
+  });
+});
+
+describe("TypesManager extension fields on update", () => {
+  const plcType: TypeRecord = {
+    type_id: "t-plc",
+    label: "PLC",
+    description: null,
+    fields: { ip: { type: "string", label: "IP", required: false, ui: "input", default: null, changeable: true, show_in_list: true } },
+    mapping: { ip: "ip" },
+  };
+
+  function renderEndpointManagerWithType(onUpdate = vi.fn().mockResolvedValue(undefined)) {
+    render(
+      <TypesManager
+        title="Endpoint Types"
+        singularLabel="Endpoint Type"
+        types={[plcType]}
+        isLoading={false}
+        roleOptions={ENDPOINT_ROLE_OPTIONS}
+        extensionFieldSets={[inventoryFieldSet]}
+        onCreate={vi.fn()}
+        onUpdate={onUpdate}
+        onDelete={vi.fn()}
+      />
+    );
+    return onUpdate;
+  }
+
+  it("TypesManager forwards extension_fields on update in the same onUpdate call", async () => {
+    const onUpdate = renderEndpointManagerWithType();
+    await userEvent.click(screen.getByRole("button", { name: "Edit PLC" }));
+    await userEvent.clear(screen.getByPlaceholderText("Human readable name"));
+    await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC 2");
+    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate).toHaveBeenCalledWith(
+      "t-plc",
+      expect.objectContaining({ label: "PLC 2", extension_fields: { inventory: ["serial_number"] } })
+    );
+  });
+
+  it("sends no extension_fields on update when nothing is ticked", async () => {
+    const onUpdate = renderEndpointManagerWithType();
+    await userEvent.click(screen.getByRole("button", { name: "Edit PLC" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onUpdate.mock.calls[0][1]).not.toHaveProperty("extension_fields");
   });
 });

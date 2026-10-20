@@ -12,6 +12,7 @@ import FieldsEditor, {
 } from "./FieldsEditor";
 import type { RoleOption } from "./typeRoles";
 import ExtensionFieldsPicker from "./ExtensionFieldsPicker";
+import { filterOfferedSelection } from "./extensionFieldsOffer";
 import type { ExtensionFieldSet } from "@/generated/edge-administration/hooks/extension_fields/useGetExtensionFields";
 
 export interface BrowserKindOption {
@@ -65,8 +66,9 @@ interface TypeFormDialogProps {
   /** When set, each field row gets a "Show in list" toggle controlling whether its value shows
    * as extra info in the endpoints list - only meaningful for endpoint types. */
   supportsListVisibility?: boolean;
-  /** When set, creating a type offers these extensions' fields as checkboxes, all unchecked.
-   * Pass enabled extensions only. */
+  /** When set, the dialog offers these extensions' fields as checkboxes, all unchecked: every
+   * field on create, and the fields the type doesn't have yet on edit. Ticked ones are sent as
+   * `extension_fields`. Pass enabled extensions only. */
   extensionFieldSets?: ExtensionFieldSet[];
 }
 
@@ -114,6 +116,8 @@ export default function TypeFormDialog({
 
   if (!isOpen) return null;
 
+  // On edit, the keys the type already has are not offered.
+  const excludedExtensionKeys = initial ? new Set(Object.keys(initial.fields)) : NO_EXCLUDED_KEYS;
   const duplicateKeys = findDuplicateKeys(rows);
 
   const handleSave = async () => {
@@ -178,8 +182,9 @@ export default function TypeFormDialog({
       }
     }
 
-    const offersExtensionFields = !isEdit && extensionFieldSets !== undefined;
-    const tickedExtensionFields = offersExtensionFields ? extensionFields : {};
+    const tickedExtensionFields = extensionFieldSets
+      ? filterOfferedSelection(extensionFields, extensionFieldSets, excludedExtensionKeys)
+      : {};
     const rowKeys = new Set(rows.map((row) => row.key.trim()));
     for (const keys of Object.values(tickedExtensionFields)) {
       const clash = keys.find((key) => rowKeys.has(key));
@@ -284,10 +289,10 @@ export default function TypeFormDialog({
             />
           </div>
 
-          {!isEdit && extensionFieldSets && (
+          {extensionFieldSets && (
             <ExtensionFieldsPicker
               fieldSets={extensionFieldSets}
-              excludeKeys={NO_EXCLUDED_KEYS}
+              excludeKeys={excludedExtensionKeys}
               value={extensionFields}
               onChange={setExtensionFields}
             />

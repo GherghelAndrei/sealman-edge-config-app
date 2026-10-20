@@ -32,7 +32,7 @@ export interface TypesManagerProps {
   /** Type ID that can't be deleted (its delete button is hidden entirely) - used for the
    * "default" device type, which the backend also rejects deleting. */
   protectedTypeId?: string;
-  /** When set, the create form offers these extensions' fields (endpoint types only). */
+  /** When set, the create and edit forms offer these extensions' fields (endpoint types only). */
   extensionFieldSets?: ExtensionFieldSet[];
   /**
    * When set, deleting a type is a cascading delete that also removes every instance of it
@@ -60,6 +60,7 @@ export interface TypesManagerProps {
       fields: Record<string, FieldDefinition | null>;
       browser_kind?: string | null;
       mapping?: Record<string, string>;
+      extension_fields?: Record<string, string[]>;
     }
   ) => Promise<unknown>;
   onDelete: (typeId: string) => Promise<unknown>;
@@ -118,6 +119,7 @@ export default function TypesManager({
           fields: result.fields,
           ...(browserKindOptions ? { browser_kind: result.browser_kind } : {}),
           ...(roleOptions ? { mapping: result.mapping ?? {} } : {}),
+          ...(result.extension_fields ? { extension_fields: result.extension_fields } : {}),
         });
         toast.success(`${singularLabel} "${result.label}" updated`);
       } else {

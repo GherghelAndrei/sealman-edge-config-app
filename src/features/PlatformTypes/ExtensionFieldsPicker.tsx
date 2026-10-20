@@ -1,7 +1,8 @@
 import type { ExtensionFieldSet } from "@/generated/edge-administration/hooks/extension_fields/useGetExtensionFields";
+import { offeredFieldSets } from "./extensionFieldsOffer";
 
 export interface ExtensionFieldsPickerProps {
-  /** The extensions whose fields can be picked (the caller passes enabled ones only). */
+  /** The extensions whose fields can be picked; disabled ones are not offered. */
   fieldSets: ExtensionFieldSet[];
   /** Keys not offered, e.g. the keys a type being edited already has. */
   excludeKeys: Set<string>;
@@ -15,12 +16,7 @@ export interface ExtensionFieldsPickerProps {
 /** Checkboxes for extension fields, one heading per extension. Renders nothing when no field is
  * left to offer. */
 export default function ExtensionFieldsPicker({ fieldSets, excludeKeys, value, onChange }: ExtensionFieldsPickerProps) {
-  const offered = fieldSets
-    .map((set) => ({
-      extension: set.extension,
-      fields: Object.entries(set.fields).filter(([key]) => !excludeKeys.has(key)),
-    }))
-    .filter((set) => set.fields.length > 0);
+  const offered = offeredFieldSets(fieldSets, excludeKeys);
 
   if (offered.length === 0) return null;
 
