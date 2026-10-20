@@ -95,7 +95,7 @@ export default function PlatformTypesSettings() {
           supportsListVisibility
           cascadeDelete={{ instancesLabel: "endpoint" }}
           onCreate={async (body) => {
-            await postEndpointType({ ...body, mapping: body.mapping ?? {} });
+            await postEndpointType({ ...body, mapping: body.mapping ?? {}, extension_fields: {} });
             await endpointTypesQuery.refetch();
           }}
           onUpdate={async (typeId, body) => {

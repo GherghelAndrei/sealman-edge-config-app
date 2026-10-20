@@ -499,6 +499,48 @@ export interface paths {
         patch: operations["update_endpoint_endpoints__endpoint_id__patch"];
         trace?: never;
     };
+    "/extension-fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List declared extension fields and where they are applied
+         * @description Lists the extensions that declare endpoint fields, and the types each field is applied to.
+         */
+        get: operations["list_extension_fields_extension_fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extension-fields/{extension}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply an extension's fields to endpoint types
+         * @description Copies the chosen declared fields onto the chosen types and marks them managed.
+         *
+         *     A key a type already has is skipped (`key_exists`) and left unchanged.
+         */
+        post: operations["apply_fields_extension_fields__extension__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/service-types": {
         parameters: {
             query?: never;
@@ -1355,6 +1397,152 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List registered extensions */
+        get: operations["list_extensions_extensions_get"];
+        put?: never;
+        /**
+         * Register a new extension
+         * @description Persists an extension's manifest with enabled=false. A freshly-registered extension is disabled by default; no routes are mounted until it is enabled.
+         */
+        post: operations["register_extension_extensions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extensions/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the extension registration manifest's JSON Schema
+         * @description Returns ExtensionRegistration.model_json_schema() verbatim, so extension authors/tooling can validate a manifest before calling POST /extensions. Stays behind extension.read, same as the other GET routes. It is not a public document: this API already requires a JWT, and the schema is an admin artifact, not something anonymous clients need.
+         */
+        get: operations["get_registration_schema_extensions_schema_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extensions/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one registered extension */
+        get: operations["get_extension_extensions__name__get"];
+        /**
+         * Replace an extension's manifest
+         * @description Replaces the entire manifest in one database transaction; never changes `enabled`. If the extension is currently enabled, its routes are rebuilt and swapped in after that commit; if they cannot be built, the extension is disabled. Refuses (409) to drop an action still
+         */
+        put: operations["replace_extension_extensions__name__put"];
+        post?: never;
+        /**
+         * Deregister an extension
+         * @description Strips this extension's actions from every role that holds them, deletes the extension and leftover Action rows in one transaction, then unmounts live routes.
+         */
+        delete: operations["delete_extension_extensions__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extensions/{name}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable an extension
+         * @description Re-fetches every body_ref schema (the retry for unreachable_ref), then mounts every persisted route onto the correct app by visibility. Disable and enable again to retry a failed upstream OpenAPI fetch without a restart.
+         */
+        post: operations["enable_extension_extensions__name__enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extensions/{name}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable an extension
+         * @description Unmounts every live route for this extension. RBAC grants and issued keys are untouched.
+         */
+        post: operations["disable_extension_extensions__name__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extensions/{name}/health-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check an extension's upstream health now
+         * @description Runs a fresh health check of every one of this extension's upstreams and persists the result. A plain GET never triggers a check on its own, it only ever returns whatever was last persisted here. Gated by extension.read, not extension.register: this refreshes a status the settings page shows, it does not change the manifest.
+         */
+        post: operations["check_extension_health_extensions__name__health_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extensions/{name}/internal-key/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate an extension's internal key
+         * @description Issues a fresh X-Internal-Key and invalidates the previous one immediately. The raw key is only ever returned here. Never re-readable via GET.
+         */
+        post: operations["rotate_internal_key_extensions__name__internal_key_rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1367,6 +1555,16 @@ export interface components {
             description?: string | null;
             /** Is Global */
             is_global?: boolean | null;
+        };
+        /** ActionSpec */
+        ActionSpec: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
         };
         /** ActiveDeploymentResponse */
         ActiveDeploymentResponse: {
@@ -1389,6 +1587,13 @@ export interface components {
         "ApplicationData-Output": {
             [key: string]: string | components["schemas"]["ApplicationData-Output"];
         };
+        /** AppliedField */
+        AppliedField: {
+            /** Type Id */
+            type_id: string;
+            /** Key */
+            key: string;
+        };
         /** ApplyDefaultTemplateResult */
         ApplyDefaultTemplateResult: {
             /** Deviceid */
@@ -1401,6 +1606,20 @@ export interface components {
             vpnContainerConfigured?: boolean | null;
             /** Vpncontainerconfigerror */
             vpnContainerConfigError?: string | null;
+        };
+        /** ApplyExtensionFieldsRequest */
+        ApplyExtensionFieldsRequest: {
+            /** Type Ids */
+            type_ids: string[];
+            /** Keys */
+            keys: string[];
+        };
+        /** ApplyExtensionFieldsResponse */
+        ApplyExtensionFieldsResponse: {
+            /** Applied */
+            applied: components["schemas"]["AppliedField"][];
+            /** Skipped */
+            skipped: components["schemas"]["SkippedField"][];
         };
         /** CellularInterface */
         CellularInterface: {
@@ -2001,6 +2220,13 @@ export interface components {
             mapping: {
                 [key: string]: string;
             };
+            /**
+             * Extension Fields
+             * @default {}
+             */
+            extension_fields: {
+                [key: string]: string[];
+            };
         };
         /** EndpointTypeResponse */
         EndpointTypeResponse: {
@@ -2016,6 +2242,13 @@ export interface components {
             };
             /** Mapping */
             mapping: {
+                [key: string]: string;
+            };
+            /**
+             * Managed By
+             * @default {}
+             */
+            managed_by: {
                 [key: string]: string;
             };
             /**
@@ -2043,6 +2276,10 @@ export interface components {
             mapping?: {
                 [key: string]: string;
             } | null;
+            /** Extension Fields */
+            extension_fields?: {
+                [key: string]: string[];
+            } | null;
         };
         /** EndpointUpdate */
         EndpointUpdate: {
@@ -2055,6 +2292,89 @@ export interface components {
             endpoint_data: {
                 [key: string]: unknown | null;
             };
+        };
+        /** ExtensionDetail */
+        ExtensionDetail: {
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: 1;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Upstreams */
+            upstreams: {
+                [key: string]: components["schemas"]["HttpUpstreamDetail"] | components["schemas"]["IotedgeUpstreamDetail"];
+            };
+            /** Actions */
+            actions?: components["schemas"]["ActionSpec"][];
+            /** Routes */
+            routes: components["schemas"]["RouteDetail"][];
+            /** Endpoint Fields */
+            endpoint_fields?: {
+                [key: string]: components["schemas"]["FieldDefinition"];
+            };
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+        };
+        /** ExtensionFieldSet */
+        ExtensionFieldSet: {
+            /** Extension */
+            extension: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Fields */
+            fields: {
+                [key: string]: components["schemas"]["FieldDefinition"];
+            };
+            /** Applied */
+            applied: {
+                [key: string]: string[];
+            };
+        };
+        /** ExtensionHealthCheckResult */
+        ExtensionHealthCheckResult: {
+            /** Name */
+            name: string;
+            /** Upstreams */
+            upstreams: {
+                [key: string]: components["schemas"]["UpstreamHealthStatus"];
+            };
+        };
+        /** ExtensionRegistration */
+        ExtensionRegistration: {
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: 1;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Upstreams */
+            upstreams: {
+                [key: string]: components["schemas"]["HttpUpstreamSpec"] | components["schemas"]["IotedgeUpstreamSpec"];
+            };
+            /** Actions */
+            actions?: components["schemas"]["ActionSpec"][];
+            /** Routes */
+            routes: components["schemas"]["RouteSpec"][];
+            /** Endpoint Fields */
+            endpoint_fields?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** FWShow */
         FWShow: {
@@ -2274,6 +2594,60 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HttpUpstreamDetail */
+        HttpUpstreamDetail: {
+            /** Last Checked At */
+            last_checked_at?: string | null;
+            /**
+             * Last Status
+             * @default unknown
+             * @enum {string}
+             */
+            last_status: "unknown" | "healthy" | "unhealthy";
+            /** Last Detail */
+            last_detail?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "http";
+            /** Base Url */
+            base_url: string;
+            /**
+             * Health Path
+             * @default /health
+             */
+            health_path: string;
+            /**
+             * Version Field
+             * @default version
+             */
+            version_field: string;
+            /** Expected Version */
+            expected_version?: string | null;
+        };
+        /** HttpUpstreamSpec */
+        HttpUpstreamSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "http";
+            /** Base Url */
+            base_url: string;
+            /**
+             * Health Path
+             * @default /health
+             */
+            health_path: string;
+            /**
+             * Version Field
+             * @default version
+             */
+            version_field: string;
+            /** Expected Version */
+            expected_version?: string | null;
+        };
         /** Inet */
         Inet: {
             filter: components["schemas"]["FilterSection"];
@@ -2283,6 +2657,56 @@ export interface components {
             lan1: components["schemas"]["LanInterface"];
             lan2: components["schemas"]["LanInterface"];
             lan3: components["schemas"]["LanInterface"];
+        };
+        /** InternalKeyRotateResponse */
+        InternalKeyRotateResponse: {
+            /** Internal Key */
+            internal_key: string;
+        };
+        /** IotEdgeCallSpec */
+        IotEdgeCallSpec: {
+            /**
+             * Operation
+             * @default direct_method
+             * @enum {string}
+             */
+            operation: "direct_method" | "twin_read" | "twin_write";
+            /** Method Name */
+            method_name?: string | null;
+        };
+        /** IotedgeUpstreamDetail */
+        IotedgeUpstreamDetail: {
+            /** Last Checked At */
+            last_checked_at?: string | null;
+            /**
+             * Last Status
+             * @default unknown
+             * @enum {string}
+             */
+            last_status: "unknown" | "healthy" | "unhealthy";
+            /** Last Detail */
+            last_detail?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "iotedge";
+            /** Module Name */
+            module_name: string;
+            /** Health Device Query */
+            health_device_query?: string | null;
+        };
+        /** IotedgeUpstreamSpec */
+        IotedgeUpstreamSpec: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "iotedge";
+            /** Module Name */
+            module_name: string;
+            /** Health Device Query */
+            health_device_query?: string | null;
         };
         /** Ip */
         Ip: {
@@ -2791,6 +3215,24 @@ export interface components {
             /** Laststatuschange */
             lastStatusChange?: string | null;
         };
+        /** QueryParamSpec */
+        QueryParamSpec: {
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @default string
+             * @enum {string}
+             */
+            type: "string" | "integer" | "number" | "boolean";
+            /**
+             * Required
+             * @default true
+             */
+            required: boolean;
+            /** Description */
+            description?: string | null;
+        };
         /** ResolvedField */
         ResolvedField: {
             /** Value */
@@ -2868,6 +3310,150 @@ export interface components {
             description?: string | null;
             /** Actions */
             actions: string[];
+        };
+        /** RouteDetail */
+        RouteDetail: {
+            /** Upstream */
+            upstream: string;
+            /** Path */
+            path: string;
+            /**
+             * Method
+             * @default GET
+             * @enum {string}
+             */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+            /** Summary */
+            summary?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Tags */
+            tags?: string[] | null;
+            /**
+             * Deprecated
+             * @default false
+             */
+            deprecated: boolean;
+            /**
+             * Status Code
+             * @default 200
+             */
+            status_code: number;
+            /** Query Params */
+            query_params?: components["schemas"]["QueryParamSpec"][];
+            /** Body */
+            body?: {
+                [key: string]: unknown;
+            } | null;
+            /** Example */
+            example?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Body Ref
+             * @default false
+             */
+            body_ref: boolean;
+            /**
+             * Visibility
+             * @default public
+             * @enum {string}
+             */
+            visibility: "public" | "internal";
+            /** Required Action */
+            required_action?: string | null;
+            /**
+             * Scoped
+             * @default false
+             */
+            scoped: boolean;
+            /**
+             * Scope Param
+             * @default device_id
+             */
+            scope_param: string;
+            /**
+             * Scope In
+             * @default query
+             * @enum {string}
+             */
+            scope_in: "path" | "query";
+            /** Upstream Path */
+            upstream_path?: string | null;
+            iotedge?: components["schemas"]["IotEdgeCallSpec"] | null;
+            /** Validation Mode */
+            validation_mode?: ("declared" | "upstream_declared" | "unreachable_ref" | "none") | null;
+        };
+        /** RouteSpec */
+        RouteSpec: {
+            /** Upstream */
+            upstream: string;
+            /** Path */
+            path: string;
+            /**
+             * Method
+             * @default GET
+             * @enum {string}
+             */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+            /** Summary */
+            summary?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Tags */
+            tags?: string[] | null;
+            /**
+             * Deprecated
+             * @default false
+             */
+            deprecated: boolean;
+            /**
+             * Status Code
+             * @default 200
+             */
+            status_code: number;
+            /** Query Params */
+            query_params?: components["schemas"]["QueryParamSpec"][];
+            /** Body */
+            body?: {
+                [key: string]: unknown;
+            } | null;
+            /** Example */
+            example?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Body Ref
+             * @default false
+             */
+            body_ref: boolean;
+            /**
+             * Visibility
+             * @default public
+             * @enum {string}
+             */
+            visibility: "public" | "internal";
+            /** Required Action */
+            required_action?: string | null;
+            /**
+             * Scoped
+             * @default false
+             */
+            scoped: boolean;
+            /**
+             * Scope Param
+             * @default device_id
+             */
+            scope_param: string;
+            /**
+             * Scope In
+             * @default query
+             * @enum {string}
+             */
+            scope_in: "path" | "query";
+            /** Upstream Path */
+            upstream_path?: string | null;
+            iotedge?: components["schemas"]["IotEdgeCallSpec"] | null;
         };
         /** SEMSCheck */
         SEMSCheck: {
@@ -3235,6 +3821,18 @@ export interface components {
             /** Value */
             value: string;
         };
+        /** SkippedField */
+        SkippedField: {
+            /** Type Id */
+            type_id: string;
+            /** Key */
+            key: string;
+            /**
+             * Reason
+             * @constant
+             */
+            reason: "key_exists";
+        };
         /** StaticRoutingConfig */
         StaticRoutingConfig: {
             /** Enabled */
@@ -3449,6 +4047,24 @@ export interface components {
             x: number;
             /** Y */
             y: number;
+        };
+        /**
+         * UpstreamHealthStatus
+         * @description Server-computed by POST /extensions/{name}/health-check and persisted, so every
+         *     caller reads the same last-known value. There is no expiry; `last_checked_at`'s age
+         *     is the staleness signal. Response-only: never part of a registration manifest.
+         */
+        UpstreamHealthStatus: {
+            /** Last Checked At */
+            last_checked_at?: string | null;
+            /**
+             * Last Status
+             * @default unknown
+             * @enum {string}
+             */
+            last_status: "unknown" | "healthy" | "unhealthy";
+            /** Last Detail */
+            last_detail?: string | null;
         };
         /** UserListResponse */
         UserListResponse: components["schemas"]["UserWithTeamsResponse"][];
@@ -4973,6 +5589,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_extension_fields_extension_fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionFieldSet"][];
+                };
+            };
+        };
+    };
+    apply_fields_extension_fields__extension__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extension: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyExtensionFieldsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyExtensionFieldsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7220,6 +7891,300 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_extensions_extensions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionDetail"][];
+                };
+            };
+        };
+    };
+    register_extension_extensions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtensionRegistration"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_registration_schema_extensions_schema_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    get_extension_extensions__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_extension_extensions__name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtensionRegistration"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_extension_extensions__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_extension_extensions__name__enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_extension_extensions__name__disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_extension_health_extensions__name__health_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionHealthCheckResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_internal_key_extensions__name__internal_key_rotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalKeyRotateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
