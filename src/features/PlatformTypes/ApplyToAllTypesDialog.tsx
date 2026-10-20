@@ -37,7 +37,7 @@ export default function ApplyToAllTypesDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>{`Apply "${extension}" to all endpoint types?`}</AlertDialogTitle>
           <AlertDialogDescription>
-            {`All ${fieldCount} fields are added to ${labels}. Types that already have a field with the same key keep their own.`}
+            {`${fieldCount === 1 ? "The 1 field is" : `All ${fieldCount} fields are`} added to ${labels}. Types that already have a field with the same key keep their own.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

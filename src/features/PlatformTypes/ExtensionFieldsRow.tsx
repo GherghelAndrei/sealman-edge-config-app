@@ -20,7 +20,8 @@ export interface ExtensionFieldsRowProps {
 const actionButtonClass = `inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium
   bg-primary/10 text-primary border border-primary/20
   hover:bg-primary hover:text-white hover:border-primary
-  transition-all shadow-sm shrink-0`;
+  transition-all shadow-sm shrink-0
+  disabled:opacity-50 disabled:pointer-events-none`;
 
 /**
  * One collapsible row of the "Additional fields" card: an extension's name, field count and how
@@ -36,6 +37,9 @@ export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }:
   const fields = Object.entries(fieldSet.fields);
   // Distinct types that have at least one of this extension's fields.
   const appliedTypeCount = new Set(fields.flatMap(([key]) => fieldSet.applied[key] ?? [])).size;
+  // Nothing to apply to: the buttons are disabled and the dialogs never open.
+  const noTypes = endpointTypes.length === 0;
+  const noTypesTitle = noTypes ? "No endpoint types defined" : undefined;
   // Types that already have every one of this extension's fields.
   const fullyAppliedTypeIds = new Set(
     endpointTypes
@@ -86,10 +90,18 @@ export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }:
             type="button"
             className={actionButtonClass}
             onClick={() => setDialog("all")}
+            disabled={noTypes}
+            title={noTypesTitle}
           >
             Apply to all types
           </button>
-          <button type="button" className={actionButtonClass} onClick={() => setDialog("choose")}>
+          <button
+            type="button"
+            className={actionButtonClass}
+            onClick={() => setDialog("choose")}
+            disabled={noTypes}
+            title={noTypesTitle}
+          >
             Choose types
           </button>
         </div>
@@ -129,7 +141,7 @@ export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }:
         </div>
       </AccordionContent>
 
-      {dialog === "all" && (
+      {dialog === "all" && !noTypes && (
         <ApplyToAllTypesDialog
           extension={fieldSet.extension}
           fieldCount={fields.length}
@@ -139,7 +151,7 @@ export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }:
           onConfirm={() => handleApply(sortedTypes.map((t) => t.type_id))}
         />
       )}
-      {dialog === "choose" && (
+      {dialog === "choose" && !noTypes && (
         <ChooseTypesDialog
           extension={fieldSet.extension}
           fieldCount={fields.length}

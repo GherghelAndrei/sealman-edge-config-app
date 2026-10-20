@@ -50,13 +50,19 @@ export default function ChooseTypesDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{`Apply "${extension}" to endpoint types`}</DialogTitle>
-          <DialogDescription>{`All ${fieldCount} fields of ${extension} are added.`}</DialogDescription>
+          <DialogDescription>
+            {`${fieldCount === 1 ? "The 1 field" : `All ${fieldCount} fields`} of ${extension} ${fieldCount === 1 ? "is" : "are"} added.`}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
           <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" role="combobox" aria-expanded={pickerOpen} className="w-full justify-between">
+              <Button variant="outline" role="combobox"
+                aria-expanded={pickerOpen}
+                className="w-full justify-between"
+                disabled={isPending}
+              >
                 Select endpoint types...
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>

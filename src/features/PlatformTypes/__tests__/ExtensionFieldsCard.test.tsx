@@ -177,6 +177,28 @@ describe("ExtensionFieldsCard", () => {
     expect([...body.keys].sort()).toEqual(["asset_tag", "serial_number"]);
   });
 
+  it("disables both apply buttons when there are no endpoint types", () => {
+    render(<ExtensionFieldsCard fieldSets={[fieldSet]} endpointTypes={[]} onApply={vi.fn()} />);
+    for (const name of ["Apply to all types", "Choose types"]) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("title", "No endpoint types defined");
+    }
+  });
+
+  it("uses the singular for an extension with one field", async () => {
+    renderCard(undefined, [otherFieldSet]);
+    await userEvent.click(screen.getByRole("button", { name: "Apply to all types" }));
+    expect(
+      within(screen.getByRole("alertdialog")).getByText(
+        "The 1 field is added to Camera, HMI, PLC. Types that already have a field with the same key keep their own.",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Choose types" }));
+    expect(within(screen.getByRole("dialog")).getByText("The 1 field of warranty is added.")).toBeInTheDocument();
+  });
+
   describe("Choose types", () => {
     // PLC has both fields (fully applied), HMI only one (partial), Camera none.
     const partlyApplied: ExtensionFieldSet = {
