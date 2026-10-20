@@ -46,7 +46,7 @@ export default function PlatformTypesSettings() {
   const { updateEndpointType } = useUpdateEndpointType();
   const { deleteEndpointType } = useDeleteEndpointType();
 
-  // One "Additional fields" card per enabled extension with declared fields; none on a query error.
+  // One "Additional fields" card with a row per enabled extension; no card on a query error or with none enabled.
   const extensionFieldsQuery = useGetExtensionFields();
   const { applyExtensionFields } = useApplyExtensionFields();
   const enabledFieldSets = extensionFieldsQuery.isError
@@ -119,10 +119,9 @@ export default function PlatformTypesSettings() {
           }}
         />
 
-        {enabledFieldSets.map((fieldSet) => (
+        {enabledFieldSets.length > 0 && (
           <ExtensionFieldsCard
-            key={fieldSet.extension}
-            fieldSet={fieldSet}
+            fieldSets={enabledFieldSets}
             endpointTypes={endpointTypesQuery.data ?? []}
             onApply={async (extension, body) => {
               const result = await applyExtensionFields({ extension, body });
@@ -130,7 +129,7 @@ export default function PlatformTypesSettings() {
               return result;
             }}
           />
-        ))}
+        )}
 
         <TypesManager
           title="Service Types"

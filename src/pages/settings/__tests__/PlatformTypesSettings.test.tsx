@@ -9,7 +9,9 @@ vi.mock("@/features/PlatformTypes/TypesManager", () => ({ default: () => null })
 vi.mock("@/features/PlatformTypes/DeviceTableColumnsCard", () => ({ default: () => null }));
 vi.mock("@/features/PlatformTypes/DefaultScanPortsCard", () => ({ default: () => null }));
 vi.mock("@/features/PlatformTypes/ExtensionFieldsCard", () => ({
-  default: ({ fieldSet }: { fieldSet: { extension: string } }) => <div>card {fieldSet.extension}</div>,
+  default: ({ fieldSets }: { fieldSets: { extension: string }[] }) => (
+    <div data-testid="extension-fields-card">card {fieldSets.map((s) => s.extension).join(",")}</div>
+  ),
 }));
 vi.mock("@/generated/edge-administration/hooks/device_types/useGetDeviceTypes", () => ({ default: () => emptyQuery }));
 vi.mock("@/generated/edge-administration/hooks/device_types/usePostDeviceType", () => ({ usePostDeviceType: () => ({}) }));
@@ -35,14 +37,23 @@ describe("PlatformTypesSettings extension field cards", () => {
     vi.mocked(useGetExtensionFields).mockReset();
   });
 
-  it("renders a card only for enabled extensions", () => {
+  it("renders one card holding only the enabled extensions", () => {
     vi.mocked(useGetExtensionFields).mockReturnValue({
       ...emptyQuery,
-      data: [fieldSet("inventory", true), fieldSet("archive", false)],
+      data: [fieldSet("inventory", true), fieldSet("archive", false), fieldSet("warranty", true)],
     } as unknown as ReturnType<typeof useGetExtensionFields>);
     render(<PlatformTypesSettings />);
-    expect(screen.getByText("card inventory")).toBeInTheDocument();
-    expect(screen.queryByText("card archive")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("extension-fields-card")).toHaveLength(1);
+    expect(screen.getByText("card inventory,warranty")).toBeInTheDocument();
+  });
+
+  it("renders no card when no extension is enabled", () => {
+    vi.mocked(useGetExtensionFields).mockReturnValue({
+      ...emptyQuery,
+      data: [fieldSet("archive", false)],
+    } as unknown as ReturnType<typeof useGetExtensionFields>);
+    render(<PlatformTypesSettings />);
+    expect(screen.queryByTestId("extension-fields-card")).not.toBeInTheDocument();
   });
 
   it("renders no cards when the extension fields query fails", () => {

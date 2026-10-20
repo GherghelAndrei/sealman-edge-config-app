@@ -34,9 +34,30 @@ const endpointTypes: TypeRecord[] = [
   { type_id: "t-cam", label: "Camera", description: null, fields: {} },
 ];
 
-function renderCard(onApply = vi.fn().mockResolvedValue({ applied: [], skipped: [] })) {
-  render(<ExtensionFieldsCard fieldSet={fieldSet} endpointTypes={endpointTypes} onApply={onApply} />);
+const otherFieldSet: ExtensionFieldSet = {
+  extension: "warranty",
+  enabled: true,
+  fields: {
+    warranty_end: { type: "string", label: "Warranty end", required: false, changeable: true, show_in_list: false },
+  },
+  applied: { warranty_end: [] },
+};
+
+function renderCard(
+  onApply = vi.fn().mockResolvedValue({ applied: [], skipped: [] }),
+  fieldSets: ExtensionFieldSet[] = [fieldSet],
+) {
+  render(<ExtensionFieldsCard fieldSets={fieldSets} endpointTypes={endpointTypes} onApply={onApply} />);
   return onApply;
+}
+
+function rowToggle(extension: string) {
+  return screen.getByRole("button", { name: new RegExp(`^${extension}\\b`) });
+}
+
+async function renderExpanded() {
+  renderCard();
+  await userEvent.click(rowToggle("inventory"));
 }
 
 function checkbox(dialog: HTMLElement, name: string) {
@@ -48,8 +69,63 @@ describe("ExtensionFieldsCard", () => {
     vi.clearAllMocks();
   });
 
-  it("lists each field with label, key and data type, and the labels of the types it is applied to", () => {
-    renderCard();
+  it('renders one "Additional fields" card with a row per extension', () => {
+    renderCard(undefined, [fieldSet, otherFieldSet]);
+    expect(screen.getAllByRole("heading", { name: "Additional fields" })).toHaveLength(1);
+    expect(screen.getByText("Fields that extensions add to endpoint types.")).toBeInTheDocument();
+    expect(rowToggle("inventory")).toBeInTheDocument();
+    expect(rowToggle("warranty")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Apply to all types" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Choose types" })).toHaveLength(2);
+  });
+
+  it("starts with every row collapsed, so no fields table is shown", () => {
+    renderCard(undefined, [fieldSet, otherFieldSet]);
+    expect(rowToggle("inventory")).toHaveAttribute("aria-expanded", "false");
+    expect(rowToggle("warranty")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("shows the field count and the number of distinct types the extension is applied to", () => {
+    renderCard(undefined, [
+      { ...fieldSet, applied: { serial_number: ["t-plc", "t-hmi"], asset_tag: ["t-plc"] } },
+      otherFieldSet,
+    ]);
+    const inventory = rowToggle("inventory");
+    expect(within(inventory).getByText("2 field(s)")).toBeInTheDocument();
+    expect(within(inventory).getByText("applied to 2 type(s)")).toBeInTheDocument();
+    const warranty = rowToggle("warranty");
+    expect(within(warranty).getByText("1 field(s)")).toBeInTheDocument();
+    expect(within(warranty).getByText("not applied yet")).toBeInTheDocument();
+  });
+
+  it("expands and collapses a row when its toggle is clicked", async () => {
+    renderCard(undefined, [fieldSet, otherFieldSet]);
+    await userEvent.click(rowToggle("inventory"));
+    expect(rowToggle("inventory")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("table")).toHaveLength(1);
+    expect(screen.getByRole("row", { name: /serial_number/ })).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /warranty_end/ })).not.toBeInTheDocument();
+    await userEvent.click(rowToggle("inventory"));
+    expect(rowToggle("inventory")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("clicking a row's action button opens the dialog for that extension without toggling the row", async () => {
+    const onApply = renderCard(undefined, [fieldSet, otherFieldSet]);
+    await userEvent.click(screen.getAllByRole("button", { name: "Apply to all types" })[1]);
+    expect(rowToggle("warranty")).toHaveAttribute("aria-expanded", "false");
+    const dialog = screen.getByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(onApply).toHaveBeenCalledWith("warranty", {
+      type_ids: expect.arrayContaining(["t-plc", "t-hmi", "t-cam"]),
+      keys: ["warranty_end"],
+    });
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("lists each field with label, key and data type, and the labels of the types it is applied to", async () => {
+    await renderExpanded();
     const row = screen.getByRole("row", { name: /serial_number/ });
     expect(within(row).getByText("Serial number")).toBeInTheDocument();
     expect(within(row).getByText("serial_number")).toBeInTheDocument();
@@ -57,8 +133,8 @@ describe("ExtensionFieldsCard", () => {
     expect(within(row).getByText("PLC, HMI")).toBeInTheDocument();
   });
 
-  it('shows "not applied yet" for a field with no types', () => {
-    renderCard();
+  it('shows "not applied yet" for a field with no types', async () => {
+    await renderExpanded();
     const row = screen.getByRole("row", { name: /asset_tag/ });
     expect(within(row).getByText("integer")).toBeInTheDocument();
     expect(within(row).getByText("not applied yet")).toBeInTheDocument();
