@@ -7,7 +7,8 @@ import type {
   ApplyExtensionFieldsRequest,
   ApplyExtensionFieldsResponse,
 } from "@/generated/edge-administration/hooks/extension_fields/useApplyExtensionFields";
-import ApplyExtensionFieldsDialog from "./ApplyExtensionFieldsDialog";
+import ApplyToAllTypesDialog from "./ApplyToAllTypesDialog";
+import ChooseTypesDialog from "./ChooseTypesDialog";
 import type { TypeRecord } from "./TypeFormDialog";
 
 export interface ExtensionFieldsRowProps {
@@ -27,7 +28,7 @@ const actionButtonClass = `inline-flex items-center gap-1.5 px-4 py-1.5 rounded-
  * fields its manifest declares and the endpoint types each one is applied to.
  */
 export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }: ExtensionFieldsRowProps) {
-  const [dialogTypeIds, setDialogTypeIds] = useState<string[] | null>(null);
+  const [dialog, setDialog] = useState<"all" | "choose" | null>(null);
   const [isApplying, setIsApplying] = useState(false);
 
   const sortedTypes = [...endpointTypes].sort((a, b) => a.label.localeCompare(b.label));
@@ -35,8 +36,16 @@ export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }:
   const fields = Object.entries(fieldSet.fields);
   // Distinct types that have at least one of this extension's fields.
   const appliedTypeCount = new Set(fields.flatMap(([key]) => fieldSet.applied[key] ?? [])).size;
+  // Types that already have every one of this extension's fields.
+  const fullyAppliedTypeIds = new Set(
+    endpointTypes
+      .filter((t) => fields.every(([key]) => (fieldSet.applied[key] ?? []).includes(t.type_id)))
+      .map((t) => t.type_id),
+  );
 
-  const handleApply = async (body: ApplyExtensionFieldsRequest) => {
+  // The extension is always applied as a whole: every declared key is sent.
+  const handleApply = async (typeIds: string[]) => {
+    const body: ApplyExtensionFieldsRequest = { type_ids: typeIds, keys: Object.keys(fieldSet.fields) };
     setIsApplying(true);
     try {
       const result = await onApply(fieldSet.extension, body);
@@ -45,7 +54,7 @@ export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }:
         const items = result.skipped.map((s) => `${typeLabel(s.type_id)}: ${s.key} (key already exists)`);
         toast.warning(`Skipped ${result.skipped.length}: ${items.join(", ")}`);
       }
-      setDialogTypeIds(null);
+      setDialog(null);
     } catch (e) {
       const message = e instanceof ApiError ? e.message : null;
       toast.error(message ?? `Failed to apply fields from "${fieldSet.extension}"`);
@@ -76,11 +85,11 @@ export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }:
           <button
             type="button"
             className={actionButtonClass}
-            onClick={() => setDialogTypeIds(sortedTypes.map((t) => t.type_id))}
+            onClick={() => setDialog("all")}
           >
             Apply to all types
           </button>
-          <button type="button" className={actionButtonClass} onClick={() => setDialogTypeIds([])}>
+          <button type="button" className={actionButtonClass} onClick={() => setDialog("choose")}>
             Choose types
           </button>
         </div>
@@ -120,14 +129,24 @@ export default function ExtensionFieldsRow({ fieldSet, endpointTypes, onApply }:
         </div>
       </AccordionContent>
 
-      {dialogTypeIds !== null && (
-        <ApplyExtensionFieldsDialog
+      {dialog === "all" && (
+        <ApplyToAllTypesDialog
           extension={fieldSet.extension}
-          fields={fieldSet.fields}
+          fieldCount={fields.length}
           endpointTypes={sortedTypes}
-          initialTypeIds={dialogTypeIds}
           isPending={isApplying}
-          onClose={() => setDialogTypeIds(null)}
+          onClose={() => setDialog(null)}
+          onConfirm={() => handleApply(sortedTypes.map((t) => t.type_id))}
+        />
+      )}
+      {dialog === "choose" && (
+        <ChooseTypesDialog
+          extension={fieldSet.extension}
+          fieldCount={fields.length}
+          endpointTypes={sortedTypes}
+          fullyAppliedTypeIds={fullyAppliedTypeIds}
+          isPending={isApplying}
+          onClose={() => setDialog(null)}
           onSubmit={handleApply}
         />
       )}

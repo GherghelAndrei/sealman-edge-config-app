@@ -15,6 +15,14 @@ vi.mock("react-toastify", () => ({
   },
 }));
 
+// cmdk and Radix Popover use browser APIs that jsdom does not have.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+Element.prototype.scrollIntoView ??= () => {};
+
 const fieldSet: ExtensionFieldSet = {
   extension: "inventory",
   enabled: true,
@@ -58,10 +66,6 @@ function rowToggle(extension: string) {
 async function renderExpanded() {
   renderCard();
   await userEvent.click(rowToggle("inventory"));
-}
-
-function checkbox(dialog: HTMLElement, name: string) {
-  return within(dialog).getByRole("checkbox", { name }) as HTMLInputElement;
 }
 
 describe("ExtensionFieldsCard", () => {
@@ -114,13 +118,14 @@ describe("ExtensionFieldsCard", () => {
   it("clicking a row's action button opens the dialog for that extension without toggling the row", async () => {
     const onApply = renderCard(undefined, [fieldSet, otherFieldSet]);
     await userEvent.click(screen.getAllByRole("button", { name: "Apply to all types" })[1]);
-    expect(rowToggle("warranty")).toHaveAttribute("aria-expanded", "false");
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("alertdialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
     expect(onApply).toHaveBeenCalledWith("warranty", {
       type_ids: expect.arrayContaining(["t-plc", "t-hmi", "t-cam"]),
       keys: ["warranty_end"],
     });
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(rowToggle("warranty")).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
@@ -140,14 +145,31 @@ describe("ExtensionFieldsCard", () => {
     expect(within(row).getByText("not applied yet")).toBeInTheDocument();
   });
 
-  it("Apply to all types pre-checks every type and every field and sends them", async () => {
+  it("Apply to all types asks for confirmation naming the field count and the type labels", async () => {
+    renderCard();
+    await userEvent.click(screen.getByRole("button", { name: "Apply to all types" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText('Apply "inventory" to all endpoint types?')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        "All 2 fields are added to Camera, HMI, PLC. Types that already have a field with the same key keep their own.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("Cancel on the confirmation sends nothing and closes it", async () => {
     const onApply = renderCard();
     await userEvent.click(screen.getByRole("button", { name: "Apply to all types" }));
-    const dialog = screen.getByRole("dialog");
-    for (const name of ["PLC", "HMI", "Camera", "Serial number (serial_number)", "Asset tag (asset_tag)"]) {
-      expect(checkbox(dialog, name).checked).toBe(true);
-    }
-    await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    expect(onApply).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("Apply on the confirmation sends every endpoint type and every declared key", async () => {
+    const onApply = renderCard();
+    await userEvent.click(screen.getByRole("button", { name: "Apply to all types" }));
+    await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Apply" }));
     expect(onApply).toHaveBeenCalledTimes(1);
     const [extension, body] = onApply.mock.calls[0];
     expect(extension).toBe("inventory");
@@ -155,34 +177,100 @@ describe("ExtensionFieldsCard", () => {
     expect([...body.keys].sort()).toEqual(["asset_tag", "serial_number"]);
   });
 
-  it("Choose types pre-checks every field and no type", async () => {
-    const onApply = renderCard();
-    await userEvent.click(screen.getByRole("button", { name: "Choose types" }));
-    const dialog = screen.getByRole("dialog");
-    for (const name of ["PLC", "HMI", "Camera"]) {
-      expect(checkbox(dialog, name).checked).toBe(false);
+  describe("Choose types", () => {
+    // PLC has both fields (fully applied), HMI only one (partial), Camera none.
+    const partlyApplied: ExtensionFieldSet = {
+      ...fieldSet,
+      applied: { serial_number: ["t-plc", "t-hmi"], asset_tag: ["t-plc"] },
+    };
+
+    async function openChooseTypes(onApply = vi.fn().mockResolvedValue({ applied: [], skipped: [] })) {
+      renderCard(onApply, [partlyApplied]);
+      await userEvent.click(screen.getByRole("button", { name: "Choose types" }));
+      const dialog = screen.getByRole("dialog");
+      return { onApply, dialog };
     }
-    expect(checkbox(dialog, "Serial number (serial_number)").checked).toBe(true);
-    expect(checkbox(dialog, "Asset tag (asset_tag)").checked).toBe(true);
-    const apply = within(dialog).getByRole("button", { name: "Apply" });
-    expect(apply).toBeDisabled();
 
-    await userEvent.click(checkbox(dialog, "Camera"));
-    expect(apply).toBeEnabled();
-    await userEvent.click(apply);
-    expect(onApply).toHaveBeenCalledWith("inventory", {
-      type_ids: ["t-cam"],
-      keys: expect.arrayContaining(["serial_number", "asset_tag"]),
+    async function openPicker(dialog: HTMLElement) {
+      await userEvent.click(within(dialog).getByRole("combobox"));
+    }
+
+    it("shows the title and the field count, and no field checkboxes", async () => {
+      const { dialog } = await openChooseTypes();
+      expect(within(dialog).getByText('Apply "inventory" to endpoint types')).toBeInTheDocument();
+      expect(within(dialog).getByText("All 2 fields of inventory are added.")).toBeInTheDocument();
+      expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+      expect(within(dialog).queryByText(/Serial number/)).not.toBeInTheDocument();
     });
-  });
 
-  it("unchecking a field leaves it out of keys", async () => {
-    const onApply = renderCard();
-    await userEvent.click(screen.getByRole("button", { name: "Apply to all types" }));
-    const dialog = screen.getByRole("dialog");
-    await userEvent.click(checkbox(dialog, "Asset tag (asset_tag)"));
-    await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
-    expect(onApply.mock.calls[0][1].keys).toEqual(["serial_number"]);
+    it("disables Apply until a type is selected", async () => {
+      const { dialog } = await openChooseTypes();
+      expect(within(dialog).getByRole("button", { name: "Apply" })).toBeDisabled();
+    });
+
+    it("filters the type list by the search text", async () => {
+      const { dialog } = await openChooseTypes();
+      await openPicker(dialog);
+      expect(screen.getAllByRole("option")).toHaveLength(3);
+      await userEvent.type(screen.getByPlaceholderText("Search types..."), "cam");
+      expect(screen.getAllByRole("option")).toHaveLength(1);
+      expect(screen.getByRole("option", { name: /Camera/ })).toBeInTheDocument();
+    });
+
+    it("lists fully applied types as disabled with \"already applied\" and partially applied ones as selectable", async () => {
+      const { dialog } = await openChooseTypes();
+      await openPicker(dialog);
+      const plc = screen.getByRole("option", { name: /PLC/ });
+      expect(plc).toHaveAttribute("aria-disabled", "true");
+      expect(within(plc).getByText("already applied")).toBeInTheDocument();
+      const hmi = screen.getByRole("option", { name: /HMI/ });
+      expect(hmi).toHaveAttribute("aria-disabled", "false");
+      expect(within(hmi).queryByText("already applied")).not.toBeInTheDocument();
+
+      await userEvent.click(plc);
+      expect(within(dialog).queryByRole("button", { name: "Remove PLC" })).not.toBeInTheDocument();
+      await userEvent.click(hmi);
+      expect(within(dialog).getByRole("button", { name: "Remove HMI" })).toBeInTheDocument();
+    });
+
+    it("adds a chip per selected type and removes it with its x button", async () => {
+      const { dialog } = await openChooseTypes();
+      await openPicker(dialog);
+      await userEvent.click(screen.getByRole("option", { name: /Camera/ }));
+      expect(within(dialog).getByText("Camera")).toBeInTheDocument();
+      const apply = within(dialog).getByRole("button", { name: "Apply" });
+      expect(apply).toBeEnabled();
+
+      await userEvent.click(within(dialog).getByRole("button", { name: "Remove Camera" }));
+      expect(within(dialog).queryByRole("button", { name: "Remove Camera" })).not.toBeInTheDocument();
+      expect(apply).toBeDisabled();
+    });
+
+    it("sends the selected type ids and every declared key", async () => {
+      const { onApply, dialog } = await openChooseTypes();
+      await openPicker(dialog);
+      await userEvent.click(screen.getByRole("option", { name: /Camera/ }));
+      await userEvent.click(screen.getByRole("option", { name: /HMI/ }));
+      await userEvent.keyboard("{Escape}");
+      await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Apply" }));
+      expect(onApply).toHaveBeenCalledTimes(1);
+      const [extension, body] = onApply.mock.calls[0];
+      expect(extension).toBe("inventory");
+      expect([...body.type_ids].sort()).toEqual(["t-cam", "t-hmi"]);
+      expect([...body.keys].sort()).toEqual(["asset_tag", "serial_number"]);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("toasts the API error and keeps the dialog open when applying fails", async () => {
+      const { dialog } = await openChooseTypes(vi.fn().mockRejectedValue(new ApiError("Unknown endpoint type", 404)));
+      await openPicker(dialog);
+      await userEvent.click(screen.getByRole("option", { name: /Camera/ }));
+      await userEvent.keyboard("{Escape}");
+      await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Apply" }));
+      expect(toast.error).toHaveBeenCalledWith("Unknown endpoint type");
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove Camera" })).toBeInTheDocument();
+    });
   });
 
   it("toasts the applied count and lists skipped key_exists items", async () => {
@@ -195,17 +283,17 @@ describe("ExtensionFieldsCard", () => {
     });
     renderCard(onApply);
     await userEvent.click(screen.getByRole("button", { name: "Apply to all types" }));
-    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Apply" }));
+    await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Apply" }));
     expect(toast.success).toHaveBeenCalledWith("Applied 2 field(s)");
     expect(toast.warning).toHaveBeenCalledWith("Skipped 1: PLC: serial_number (key already exists)");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("does not warn when nothing is skipped", async () => {
     const onApply = vi.fn().mockResolvedValue({ applied: [{ type_id: "t-cam", key: "asset_tag" }], skipped: [] });
     renderCard(onApply);
     await userEvent.click(screen.getByRole("button", { name: "Apply to all types" }));
-    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Apply" }));
+    await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Apply" }));
     expect(toast.success).toHaveBeenCalledWith("Applied 1 field(s)");
     expect(toast.warning).not.toHaveBeenCalled();
   });
@@ -214,9 +302,9 @@ describe("ExtensionFieldsCard", () => {
     const onApply = vi.fn().mockRejectedValue(new ApiError("Extension 'inventory' is disabled; enable it to apply its fields", 409));
     renderCard(onApply);
     await userEvent.click(screen.getByRole("button", { name: "Apply to all types" }));
-    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Apply" }));
+    await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Apply" }));
     expect(toast.error).toHaveBeenCalledWith("Extension 'inventory' is disabled; enable it to apply its fields");
     expect(toast.success).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 });
