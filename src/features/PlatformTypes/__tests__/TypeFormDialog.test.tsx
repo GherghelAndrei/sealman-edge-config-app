@@ -142,6 +142,47 @@ describe("TypeFormDialog roles", () => {
     expect(result.mapping).not.toHaveProperty("serial_number");
   });
 
+  it.each(["Endpoint Type", "Service Type", "Device Type"])("edit of a %s sends an empty type description when one is cleared", async (singularLabel) => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const record: TypeRecord = { type_id: "t1", label: "T", description: "Old text", fields: {}, mapping: {} };
+    render(<TypeFormDialog isOpen onClose={() => {}} onSubmit={onSubmit} initial={record} singularLabel={singularLabel} />);
+    const input = screen.getByPlaceholderText("Optional description");
+    await userEvent.clear(input);
+    expect(input).toHaveValue("");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit.mock.calls[0][0].description).toBe("");
+  });
+
+  it("edit sends a null type description when it never had one, even after typing and erasing", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const record: TypeRecord = { type_id: "t1", label: "T", description: null, fields: {}, mapping: {} };
+    render(<TypeFormDialog isOpen onClose={() => {}} onSubmit={onSubmit} initial={record} singularLabel="Endpoint Type" />);
+    const input = screen.getByPlaceholderText("Optional description");
+    await userEvent.type(input, "x");
+    await userEvent.clear(input);
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit.mock.calls[0][0].description).toBeNull();
+  });
+
+  it("create sends a null type description when it is left empty", async () => {
+    const onSubmit = renderEndpointCreate();
+    await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
+    await userEvent.type(screen.getByPlaceholderText("Optional description"), "   ");
+    await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
+    expect(onSubmit.mock.calls[0][0].description).toBeNull();
+  });
+
+  it("edit sends a trimmed type description when it is changed", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const record: TypeRecord = { type_id: "t1", label: "T", description: "Old", fields: {}, mapping: {} };
+    render(<TypeFormDialog isOpen onClose={() => {}} onSubmit={onSubmit} initial={record} singularLabel="Endpoint Type" />);
+    const input = screen.getByPlaceholderText("Optional description");
+    await userEvent.clear(input);
+    await userEvent.type(input, " New ");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit.mock.calls[0][0].description).toBe("New");
+  });
+
   it("edit sends an empty description for a cleared description so the stored one is cleared", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const record: TypeRecord = {

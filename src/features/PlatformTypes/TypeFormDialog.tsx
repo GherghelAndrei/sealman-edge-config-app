@@ -199,7 +199,8 @@ export default function TypeFormDialog({
     try {
       await onSubmit({
         label: trimmedLabel,
-        description: description.trim() || null,
+        // the type PATCH skips a null description, so clearing an existing one sends ""
+        description: description.trim() || (initial?.description ? "" : null),
         fields,
         browser_kind: browserKind || null,
         mapping: roleOptions ? buildMappingPayload(rows) : null,
