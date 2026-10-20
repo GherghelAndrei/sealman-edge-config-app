@@ -1,58 +1,91 @@
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { ExtensionFieldSet } from "@/generated/edge-administration/hooks/extension_fields/useGetExtensionFields";
-import { offeredFieldSets } from "./extensionFieldsOffer";
+import { offeredFieldSets, type OfferedFieldSet } from "./extensionFieldsOffer";
 
 export interface ExtensionFieldsPickerProps {
   /** The extensions whose fields can be picked; disabled ones are not offered. */
   fieldSets: ExtensionFieldSet[];
   /** Keys not offered, e.g. the keys a type being edited already has. */
   excludeKeys: Set<string>;
-  /** Ticked keys as {extension: [keys]}. */
+  /** Ticked extensions as {extension: [its offered keys]}. */
   value: Record<string, string[]>;
-  /** Gets the new selection. An extension with no ticked keys is left out, because the API
-   * rejects an extension listed with an empty key list. */
+  /** Gets the new selection. Ticking an extension adds all its offered keys (in declaration
+   * order); unticking it leaves the extension out, because the API rejects an extension listed
+   * with an empty key list. */
   onChange: (value: Record<string, string[]>) => void;
 }
 
-/** Checkboxes for extension fields, one heading per extension. Renders nothing when no field is
- * left to offer. */
+/** The "Additional fields" section of the type dialogs: one row per extension that has fields to
+ * offer, with a checkbox that adds all of them and a toggle that shows them read-only. Renders
+ * nothing when no field is left to offer. */
 export default function ExtensionFieldsPicker({ fieldSets, excludeKeys, value, onChange }: ExtensionFieldsPickerProps) {
   const offered = offeredFieldSets(fieldSets, excludeKeys);
 
   if (offered.length === 0) return null;
 
-  const toggle = (extension: string, key: string, declaredKeys: string[]) => {
-    const current = value[extension] ?? [];
-    const nextSet = new Set(current.includes(key) ? current.filter((k) => k !== key) : [...current, key]);
-    // Keep the keys in declaration order, whatever order they were ticked in.
-    const nextKeys = declaredKeys.filter((k) => nextSet.has(k));
-    const next = { ...value, [extension]: nextKeys };
-    if (nextKeys.length === 0) delete next[extension];
+  const toggle = (extension: string, offeredKeys: string[]) => {
+    const next = { ...value };
+    if (extension in value) delete next[extension];
+    else next[extension] = offeredKeys;
     onChange(next);
   };
 
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-2">Extension fields</h3>
-      <div className="space-y-3">
-        {offered.map(({ extension, fields }) => {
-          const declaredKeys = fields.map(([key]) => key);
-          return (
-            <fieldset key={extension} className="space-y-1">
-              <legend className="text-sm font-medium mb-1">{extension}</legend>
-              {fields.map(([key, definition]) => (
-                <label key={key} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={(value[extension] ?? []).includes(key)}
-                    onChange={() => toggle(extension, key, declaredKeys)}
-                  />
-                  {`${definition.label} (${key})`}
-                </label>
-              ))}
-            </fieldset>
-          );
-        })}
+      <h3 className="text-sm font-semibold mb-2">Additional fields</h3>
+      <div className="border rounded-md">
+        {offered.map((set) => (
+          <ExtensionRow
+            key={set.extension}
+            fieldSet={set}
+            checked={set.extension in value}
+            onToggle={() => toggle(set.extension, set.fields.map(([key]) => key))}
+          />
+        ))}
       </div>
+    </div>
+  );
+}
+
+function ExtensionRow({ fieldSet, checked, onToggle }: { fieldSet: OfferedFieldSet; checked: boolean; onToggle: () => void }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { extension, fields } = fieldSet;
+  const listId = `extension-fields-${extension}`;
+
+  return (
+    <div role="group" aria-label={extension} className="border-b last:border-b-0">
+      <div className="flex items-center gap-4 px-4 py-3">
+        <label className="flex flex-1 min-w-0 items-baseline gap-x-3 text-sm">
+          <input type="checkbox" className="self-center" checked={checked} onChange={onToggle} />
+          <span className="font-mono font-medium">{extension}</span>{" "}
+          <span className="text-muted-foreground">{fields.length} field(s)</span>
+        </label>
+        <button
+          type="button"
+          aria-expanded={isExpanded}
+          aria-controls={listId}
+          onClick={() => setIsExpanded((open) => !open)}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground shrink-0"
+        >
+          Show fields
+          <ChevronDown
+            aria-hidden="true"
+            className={cn("h-4 w-4 transition-transform duration-200", isExpanded && "rotate-180")}
+          />
+        </button>
+      </div>
+      {isExpanded && (
+        <ul id={listId} aria-label={`${extension} fields`} className="px-4 pb-3 space-y-1 text-sm">
+          {fields.map(([key, definition]) => (
+            <li key={key} className="flex items-baseline gap-3">
+              <span className="font-medium">{definition.label}</span>
+              <span className="font-mono text-xs text-muted-foreground">{key}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

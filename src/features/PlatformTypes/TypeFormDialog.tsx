@@ -66,9 +66,10 @@ interface TypeFormDialogProps {
   /** When set, each field row gets a "Show in list" toggle controlling whether its value shows
    * as extra info in the endpoints list - only meaningful for endpoint types. */
   supportsListVisibility?: boolean;
-  /** When set, the dialog offers these extensions' fields as checkboxes, all unchecked: every
-   * field on create, and the fields the type doesn't have yet on edit. Ticked ones are sent as
-   * `extension_fields`. Pass enabled extensions only. */
+  /** When set, the dialog has an "Additional fields" section with one unchecked row per extension
+   * that has fields to offer: every field on create, and the fields the type doesn't have yet on
+   * edit. A ticked extension's offered fields are all sent as `extension_fields`. Pass enabled
+   * extensions only. */
   extensionFieldSets?: ExtensionFieldSet[];
 }
 

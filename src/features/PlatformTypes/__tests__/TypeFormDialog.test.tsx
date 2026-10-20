@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TypeFormDialog, { TypeRecord } from "../TypeFormDialog";
 import ExtensionFieldsPicker from "../ExtensionFieldsPicker";
@@ -280,59 +280,86 @@ function renderEndpointCreateWithExtensions(defaultFields: Record<string, FieldD
   return onSubmit;
 }
 
+function extensionCheckbox(name: string) {
+  return screen.getByRole("checkbox", { name });
+}
+
+function showFieldsButton(extension: string) {
+  return within(screen.getByRole("group", { name: extension })).getByRole("button", { name: "Show fields" });
+}
+
 describe("TypeFormDialog extension fields on create", () => {
-  it("create shows an Extension fields section with every field unchecked", () => {
+  it("create shows an Additional fields section with one unchecked, collapsed row per extension", () => {
     renderEndpointCreateWithExtensions();
-    expect(screen.getByText("Extension fields")).toBeInTheDocument();
-    expect(screen.getByText("inventory")).toBeInTheDocument();
-    expect(screen.getByText("monitoring")).toBeInTheDocument();
-    expect(screen.getByLabelText("Serial number (serial_number)")).not.toBeChecked();
-    expect(screen.getByLabelText("Asset tag (asset_tag)")).not.toBeChecked();
-    expect(screen.getByLabelText("Poll interval (poll_interval)")).not.toBeChecked();
+    expect(screen.getByText("Additional fields")).toBeInTheDocument();
+    expect(screen.queryByText("Extension fields")).not.toBeInTheDocument();
+    expect(extensionCheckbox("inventory 2 field(s)")).not.toBeChecked();
+    expect(extensionCheckbox("monitoring 1 field(s)")).not.toBeChecked();
+    expect(showFieldsButton("inventory")).toHaveAttribute("aria-expanded", "false");
+    expect(showFieldsButton("monitoring")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("serial_number")).not.toBeInTheDocument();
+    // No per-field checkboxes anymore.
+    expect(screen.queryByRole("checkbox", { name: /serial_number/ })).not.toBeInTheDocument();
   });
 
-  it("checking a field sends extension_fields grouped by extension", async () => {
+  it("ticking an extension sends all its fields in declaration order", async () => {
     const onSubmit = renderEndpointCreateWithExtensions();
     await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
-    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(extensionCheckbox("inventory 2 field(s)"));
     await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
-    expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ inventory: ["serial_number"] });
+    expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ inventory: ["serial_number", "asset_tag"] });
   });
 
-  it("omits an extension whose fields were checked and then unchecked", async () => {
+  it("omits an extension that was ticked and then unticked", async () => {
     const onSubmit = renderEndpointCreateWithExtensions();
     await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
-    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
-    await userEvent.click(screen.getByLabelText("Poll interval (poll_interval)"));
-    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
+    await userEvent.click(extensionCheckbox("inventory 2 field(s)"));
+    await userEvent.click(extensionCheckbox("monitoring 1 field(s)"));
+    await userEvent.click(extensionCheckbox("inventory 2 field(s)"));
     await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
     expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ monitoring: ["poll_interval"] });
   });
 
-  it("sends no extension_fields when nothing is checked", async () => {
+  it("sends no extension_fields when nothing is ticked", async () => {
     const onSubmit = renderEndpointCreateWithExtensions();
     await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
     await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("extension_fields");
   });
 
-  it("blocks save when a checked key is also a row key", async () => {
+  it("blocks save when a ticked extension's key is also a row key", async () => {
     const onSubmit = renderEndpointCreateWithExtensions({ ...ENDPOINT_TYPE_DEFAULT_FIELDS, serial_number: stringField("Serial") });
     await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
-    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(extensionCheckbox("inventory 2 field(s)"));
     await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
     expect(screen.getByText('Field "serial_number" is also selected as an extension field')).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("shows no Extension fields section without field sets", () => {
+  it("shows no Additional fields section without field sets", () => {
     renderEndpointCreate();
-    expect(screen.queryByText("Extension fields")).not.toBeInTheDocument();
+    expect(screen.queryByText("Additional fields")).not.toBeInTheDocument();
   });
 });
 
 describe("ExtensionFieldsPicker", () => {
-  it("hides excluded keys and an extension left with none", () => {
+  it("Show fields expands a read-only list of the offered fields and collapses it again", async () => {
+    render(<ExtensionFieldsPicker fieldSets={[inventoryFieldSet]} excludeKeys={new Set()} value={{}} onChange={() => {}} />);
+    const toggle = showFieldsButton("inventory");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const list = screen.getByRole("list", { name: "inventory fields" });
+    expect(within(list).getByText("Serial number")).toBeInTheDocument();
+    expect(within(list).getByText("serial_number")).toBeInTheDocument();
+    expect(within(list).getByText("Asset tag")).toBeInTheDocument();
+    expect(within(list).getByText("asset_tag")).toBeInTheDocument();
+    expect(within(list).queryByRole("checkbox")).not.toBeInTheDocument();
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("list", { name: "inventory fields" })).not.toBeInTheDocument();
+  });
+
+  it("counts and lists only the keys not excluded, and hides an extension left with none", async () => {
     render(
       <ExtensionFieldsPicker
         fieldSets={[inventoryFieldSet, monitoringFieldSet]}
@@ -341,9 +368,25 @@ describe("ExtensionFieldsPicker", () => {
         onChange={() => {}}
       />
     );
-    expect(screen.queryByLabelText("Serial number (serial_number)")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Asset tag (asset_tag)")).toBeInTheDocument();
-    expect(screen.queryByText("monitoring")).not.toBeInTheDocument();
+    expect(extensionCheckbox("inventory 1 field(s)")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "monitoring" })).not.toBeInTheDocument();
+    await userEvent.click(showFieldsButton("inventory"));
+    const list = screen.getByRole("list", { name: "inventory fields" });
+    expect(within(list).queryByText("serial_number")).not.toBeInTheDocument();
+    expect(within(list).getByText("asset_tag")).toBeInTheDocument();
+  });
+
+  it("does not list a disabled extension", () => {
+    render(
+      <ExtensionFieldsPicker
+        fieldSets={[{ ...inventoryFieldSet, enabled: false }, monitoringFieldSet]}
+        excludeKeys={new Set()}
+        value={{}}
+        onChange={() => {}}
+      />
+    );
+    expect(screen.queryByRole("group", { name: "inventory" })).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "monitoring" })).toBeInTheDocument();
   });
 
   it("renders nothing when no field is left to offer", () => {
@@ -353,19 +396,30 @@ describe("ExtensionFieldsPicker", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("reports ticked keys in declaration order and drops an extension with none", async () => {
+  it("ticking reports all offered keys in declaration order, unticking drops the extension", async () => {
     const onChange = vi.fn();
     const { rerender } = render(
-      <ExtensionFieldsPicker fieldSets={[inventoryFieldSet]} excludeKeys={new Set()} value={{ inventory: ["asset_tag"] }} onChange={onChange} />
+      <ExtensionFieldsPicker
+        fieldSets={[inventoryFieldSet, monitoringFieldSet]}
+        excludeKeys={new Set(["serial_number"])}
+        value={{ monitoring: ["poll_interval"] }}
+        onChange={onChange}
+      />
     );
-    expect(screen.getByLabelText("Asset tag (asset_tag)")).toBeChecked();
-    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
-    expect(onChange).toHaveBeenLastCalledWith({ inventory: ["serial_number", "asset_tag"] });
+    expect(extensionCheckbox("monitoring 1 field(s)")).toBeChecked();
+    expect(extensionCheckbox("inventory 1 field(s)")).not.toBeChecked();
+    await userEvent.click(extensionCheckbox("inventory 1 field(s)"));
+    expect(onChange).toHaveBeenLastCalledWith({ monitoring: ["poll_interval"], inventory: ["asset_tag"] });
     rerender(
-      <ExtensionFieldsPicker fieldSets={[inventoryFieldSet]} excludeKeys={new Set()} value={{ inventory: ["asset_tag"] }} onChange={onChange} />
+      <ExtensionFieldsPicker
+        fieldSets={[inventoryFieldSet, monitoringFieldSet]}
+        excludeKeys={new Set(["serial_number"])}
+        value={{ monitoring: ["poll_interval"], inventory: ["asset_tag"] }}
+        onChange={onChange}
+      />
     );
-    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
-    expect(onChange).toHaveBeenLastCalledWith({});
+    await userEvent.click(extensionCheckbox("monitoring 1 field(s)"));
+    expect(onChange).toHaveBeenLastCalledWith({ inventory: ["asset_tag"] });
   });
 });
 
@@ -395,26 +449,43 @@ function renderEndpointEditWithExtensions(
 }
 
 describe("TypeFormDialog extension fields on edit", () => {
-  it("edit lists only enabled-extension fields whose key is not on the type, all unchecked", () => {
+  it("edit offers and counts only the fields the type doesn't have yet, unchecked and collapsed", async () => {
     renderEndpointEditWithExtensions();
-    expect(screen.getByText("Extension fields")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Serial number (serial_number)")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Asset tag (asset_tag)")).not.toBeChecked();
-    expect(screen.getByLabelText("Poll interval (poll_interval)")).not.toBeChecked();
+    expect(screen.getByText("Additional fields")).toBeInTheDocument();
+    expect(extensionCheckbox("inventory 1 field(s)")).not.toBeChecked();
+    expect(extensionCheckbox("monitoring 1 field(s)")).not.toBeChecked();
+    expect(showFieldsButton("inventory")).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(showFieldsButton("inventory"));
+    const list = screen.getByRole("list", { name: "inventory fields" });
+    expect(within(list).queryByText("serial_number")).not.toBeInTheDocument();
+    expect(within(list).getByText("asset_tag")).toBeInTheDocument();
   });
 
-  it("Save sends the field edits and the ticked extension_fields in one onSubmit result", async () => {
+  it("edit does not list an extension whose fields the type already has", () => {
+    renderEndpointEditWithExtensions({ ...plcRecord, fields: { ...plcRecord.fields, poll_interval: stringField("Poll") } });
+    expect(screen.queryByRole("group", { name: "monitoring" })).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "inventory" })).toBeInTheDocument();
+  });
+
+  it("Save sends the field edits and the ticked extension's offered keys in one onSubmit result", async () => {
     const record: TypeRecord = { ...plcRecord, fields: { ip: stringField("Host") } };
     const { onSubmit } = renderEndpointEditWithExtensions(record);
     const labelInput = screen.getByDisplayValue("Host");
     await userEvent.clear(labelInput);
     await userEvent.type(labelInput, "Address");
-    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(extensionCheckbox("inventory 2 field(s)"));
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const result = onSubmit.mock.calls[0][0];
     expect(result.fields.ip).toMatchObject({ label: "Address" });
-    expect(result.extension_fields).toEqual({ inventory: ["serial_number"] });
+    expect(result.extension_fields).toEqual({ inventory: ["serial_number", "asset_tag"] });
+  });
+
+  it("edit sends only the missing keys of a ticked extension", async () => {
+    const { onSubmit } = renderEndpointEditWithExtensions();
+    await userEvent.click(extensionCheckbox("inventory 1 field(s)"));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ inventory: ["asset_tag"] });
   });
 
   it("Save without ticks sends no extension_fields", async () => {
@@ -423,9 +494,9 @@ describe("TypeFormDialog extension fields on edit", () => {
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("extension_fields");
   });
 
-  it("blocks save when a ticked key is also a new row key", async () => {
+  it("blocks save when a ticked extension's key is also a new row key", async () => {
     const { onSubmit } = renderEndpointEditWithExtensions();
-    await userEvent.click(screen.getByLabelText("Poll interval (poll_interval)"));
+    await userEvent.click(extensionCheckbox("monitoring 1 field(s)"));
     await userEvent.click(screen.getByRole("button", { name: "Add field" }));
     const keyInputs = screen.getAllByPlaceholderText("field_key");
     await userEvent.type(keyInputs[keyInputs.length - 1], "poll_interval");
@@ -436,27 +507,45 @@ describe("TypeFormDialog extension fields on edit", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("resets the ticked fields when the dialog is reopened", async () => {
+  it("resets the ticked extensions when the dialog is reopened", async () => {
     const { view, props } = renderEndpointEditWithExtensions();
-    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
+    await userEvent.click(extensionCheckbox("inventory 1 field(s)"));
     view.rerender(<TypeFormDialog isOpen={false} {...props} extensionFieldSets={[inventoryFieldSet, monitoringFieldSet]} />);
     view.rerender(<TypeFormDialog isOpen {...props} extensionFieldSets={[inventoryFieldSet, monitoringFieldSet]} />);
-    expect(screen.getByLabelText("Asset tag (asset_tag)")).not.toBeChecked();
+    expect(extensionCheckbox("inventory 1 field(s)")).not.toBeChecked();
   });
 });
 
 describe("TypeFormDialog drops stale extension field ticks", () => {
-  it("does not send a ticked field whose extension is no longer offered (edit)", async () => {
+  it("does not send a ticked extension that is no longer offered (edit)", async () => {
     const { onSubmit, view, props } = renderEndpointEditWithExtensions();
-    await userEvent.click(screen.getByLabelText("Asset tag (asset_tag)"));
-    await userEvent.click(screen.getByLabelText("Poll interval (poll_interval)"));
+    await userEvent.click(extensionCheckbox("inventory 1 field(s)"));
+    await userEvent.click(extensionCheckbox("monitoring 1 field(s)"));
     // A refetch while the dialog is open disables "inventory".
     view.rerender(<TypeFormDialog isOpen {...props} extensionFieldSets={[monitoringFieldSet]} />);
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ monitoring: ["poll_interval"] });
   });
 
-  it("ignores a stale ticked key on create, including for the clash check", async () => {
+  it("a ticked extension's keys follow the fields offered now", async () => {
+    const { onSubmit, view, props } = renderEndpointEditWithExtensions({ ...plcRecord, fields: { ip: stringField("IP") } });
+    await userEvent.click(extensionCheckbox("inventory 2 field(s)"));
+    // A refetch while the dialog is open: the manifest dropped asset_tag and added location.
+    const refetched: ExtensionFieldSet = {
+      ...inventoryFieldSet,
+      fields: {
+        serial_number: inventoryFieldSet.fields.serial_number,
+        location: { type: "string", label: "Location", required: false, changeable: true, show_in_list: false },
+      },
+      applied: { serial_number: [], location: [] },
+    };
+    view.rerender(<TypeFormDialog isOpen {...props} extensionFieldSets={[refetched, monitoringFieldSet]} />);
+    expect(extensionCheckbox("inventory 2 field(s)")).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit.mock.calls[0][0].extension_fields).toEqual({ inventory: ["serial_number", "location"] });
+  });
+
+  it("ignores a stale ticked extension on create, including for the clash check", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const props = {
       onClose: () => {},
@@ -468,7 +557,7 @@ describe("TypeFormDialog drops stale extension field ticks", () => {
     };
     const { rerender } = render(<TypeFormDialog isOpen {...props} extensionFieldSets={[inventoryFieldSet]} />);
     await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
-    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(extensionCheckbox("inventory 2 field(s)"));
     rerender(<TypeFormDialog isOpen {...props} extensionFieldSets={[{ ...inventoryFieldSet, enabled: false }]} />);
     await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);

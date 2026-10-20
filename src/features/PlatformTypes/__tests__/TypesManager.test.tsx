@@ -73,7 +73,7 @@ describe("TypesManager extension fields", () => {
   async function submitCreate(tick: boolean) {
     await userEvent.click(screen.getByRole("button", { name: "Add endpoint type" }));
     await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC");
-    if (tick) await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    if (tick) await userEvent.click(screen.getByRole("checkbox", { name: "inventory 1 field(s)" }));
     const buttons = screen.getAllByRole("button", { name: "Add endpoint type" });
     await userEvent.click(buttons[buttons.length - 1]);
   }
@@ -122,7 +122,7 @@ describe("TypesManager extension fields on update", () => {
     await userEvent.click(screen.getByRole("button", { name: "Edit PLC" }));
     await userEvent.clear(screen.getByPlaceholderText("Human readable name"));
     await userEvent.type(screen.getByPlaceholderText("Human readable name"), "PLC 2");
-    await userEvent.click(screen.getByLabelText("Serial number (serial_number)"));
+    await userEvent.click(screen.getByRole("checkbox", { name: "inventory 1 field(s)" }));
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(onUpdate).toHaveBeenCalledTimes(1);
     expect(onUpdate).toHaveBeenCalledWith(
