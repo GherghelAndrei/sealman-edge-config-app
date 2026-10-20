@@ -194,8 +194,7 @@ export default function TypeFormDialog({
       }
     }
 
-    const originalKeys = Object.keys(initial?.fields ?? {});
-    const fields = buildFieldsPayload(rows, originalKeys);
+    const fields = buildFieldsPayload(rows, initial?.fields ?? {});
 
     try {
       await onSubmit({

@@ -142,6 +142,36 @@ describe("TypeFormDialog roles", () => {
     expect(result.mapping).not.toHaveProperty("serial_number");
   });
 
+  it("edit sends an empty description for a cleared description so the stored one is cleared", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const record: TypeRecord = {
+      type_id: "t1",
+      label: "T",
+      description: null,
+      fields: { addr: { ...stringField("Address"), description: "Where to reach it" }, note: stringField("Note") },
+      mapping: {},
+    };
+    render(<TypeFormDialog isOpen onClose={() => {}} onSubmit={onSubmit} initial={record} singularLabel="Service Type" />);
+    const descriptionInput = screen.getByDisplayValue("Where to reach it");
+    await userEvent.clear(descriptionInput);
+    expect(descriptionInput).toHaveValue("");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const result = onSubmit.mock.calls[0][0];
+    expect(result.fields.addr.description).toBe("");
+    expect(result.fields.note.description ?? null).toBeNull();
+  });
+
+  it("edit does not send an empty description for a field that never had one, even after typing and erasing", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const record: TypeRecord = { type_id: "t1", label: "T", description: null, fields: { note: stringField("Note") }, mapping: {} };
+    render(<TypeFormDialog isOpen onClose={() => {}} onSubmit={onSubmit} initial={record} singularLabel="Device Type" />);
+    const descriptionInput = screen.getByPlaceholderText("Optional help text");
+    await userEvent.type(descriptionInput, "x");
+    await userEvent.clear(descriptionInput);
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSubmit.mock.calls[0][0].fields.note.description ?? null).toBeNull();
+  });
+
   it("edit with a managed field sends null for a removed managed field and no mapping entry for it", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const record: TypeRecord = {

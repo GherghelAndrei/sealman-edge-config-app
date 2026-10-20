@@ -108,16 +108,21 @@ export function findDuplicateKeys(rows: FieldRow[]): Set<string> {
 }
 
 /**
- * Diffs the current rows against the field keys a type originally had and
+ * Diffs the current rows against the fields a type originally had and
  * produces a PATCH-ready fields payload: unchanged/renamed/new fields map to
  * their full definition, keys that disappeared (removed or renamed away
  * from) map to `null` so the backend deletes them.
+ *
+ * An empty description is sent as `""` only when it clears a description the
+ * field had under the same key (the PATCH merge ignores `null`, so `""` is what
+ * clears it); otherwise it is sent as `null`, so no spurious change is made.
  */
 export function buildFieldsPayload(
   rows: FieldRow[],
-  originalKeys: string[]
+  originalFields: Record<string, FieldDefinition>
 ): Record<string, FieldDefinition | null> {
   const payload: Record<string, FieldDefinition | null> = {};
+  const originalKeys = Object.keys(originalFields);
 
   const stillPresentOriginalKeys = new Set(
     rows.filter((r) => r.originalKey && r.originalKey === r.key.trim()).map((r) => r.originalKey as string)
@@ -130,7 +135,13 @@ export function buildFieldsPayload(
   }
 
   for (const row of rows) {
-    payload[row.key.trim()] = row.definition;
+    const key = row.key.trim();
+    let definition = row.definition;
+    if (definition.description === "") {
+      const original = row.originalKey === key ? originalFields[key] : undefined;
+      definition = { ...definition, description: original?.description ? "" : null };
+    }
+    payload[key] = definition;
   }
 
   return payload;
@@ -472,7 +483,7 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                     type="text"
                     placeholder="Optional help text"
                     value={row.definition.description ?? ""}
-                    onChange={(e) => updateDefinition(row.id, { description: e.target.value || null })}
+                    onChange={(e) => updateDefinition(row.id, { description: e.target.value })}
                     className={compactInputClass}
                   />
                 </Field>
