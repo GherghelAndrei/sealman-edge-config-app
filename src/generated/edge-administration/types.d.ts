@@ -1994,6 +1994,13 @@ export interface components {
             fields: {
                 [key: string]: components["schemas"]["FieldDefinition"];
             };
+            /**
+             * Mapping
+             * @default {}
+             */
+            mapping: {
+                [key: string]: string;
+            };
         };
         /** EndpointTypeResponse */
         EndpointTypeResponse: {
@@ -2031,6 +2038,10 @@ export interface components {
             /** Fields */
             fields?: {
                 [key: string]: components["schemas"]["FieldDefinitionUpdate"] | null;
+            } | null;
+            /** Mapping */
+            mapping?: {
+                [key: string]: string;
             } | null;
         };
         /** EndpointUpdate */
@@ -2397,7 +2408,7 @@ export interface components {
         /** MappedEndpoint */
         MappedEndpoint: {
             /** Ip */
-            ip: string;
+            ip?: string | null;
             /**
              * Status
              * @enum {string}
@@ -2428,7 +2439,7 @@ export interface components {
         /** MappedPort */
         MappedPort: {
             /** Port */
-            port: number;
+            port?: number | null;
             /**
              * Status
              * @enum {string}
@@ -3132,6 +3143,13 @@ export interface components {
             };
             /** Browser Kind */
             browser_kind?: string | null;
+            /**
+             * Mapping
+             * @default {}
+             */
+            mapping: {
+                [key: string]: string;
+            };
         };
         /** ServiceTypeResponse */
         ServiceTypeResponse: {
@@ -3174,6 +3192,10 @@ export interface components {
             } | null;
             /** Browser Kind */
             browser_kind?: string | null;
+            /** Mapping */
+            mapping?: {
+                [key: string]: string;
+            } | null;
         };
         /** ServiceUpdate */
         ServiceUpdate: {

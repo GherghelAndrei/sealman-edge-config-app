@@ -4,6 +4,7 @@ import { components } from "@/generated/edge-administration/types";
 import FieldValueInput, { compactInputClass, validateFieldValue } from "./FieldValueInput";
 import Toggle from "./Toggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { RoleOption } from "./typeRoles";
 
 export type FieldDefinition = components["schemas"]["FieldDefinition"];
 type FieldType = FieldDefinition["type"];
@@ -19,6 +20,8 @@ export interface FieldRow {
   definition: FieldDefinition;
   /** Raw text for the options input, kept separate from definition.options so typing a trailing comma isn't eaten. */
   optionsText: string;
+  /** The role this field carries on its type (e.g. "ip"), or null. */
+  role: string | null;
 }
 
 const UI_OPTIONS_BY_TYPE: Record<FieldType, { value: FieldUi; label: string }[]> = {
@@ -58,6 +61,7 @@ export function emptyFieldRow(): FieldRow {
       show_in_list: true,
     },
     optionsText: "",
+    role: null,
   };
 }
 
@@ -68,13 +72,17 @@ function parseOptions(text: string): string[] {
     .filter(Boolean);
 }
 
-export function rowsFromFields(fields: Record<string, FieldDefinition>): FieldRow[] {
+export function rowsFromFields(
+  fields: Record<string, FieldDefinition>,
+  mapping: Record<string, string> = {}
+): FieldRow[] {
   return Object.entries(fields).map(([key, definition]) => ({
     id: crypto.randomUUID(),
     originalKey: key,
     key,
     definition,
     optionsText: (definition.options ?? []).join(", "),
+    role: mapping[key] ?? null,
   }));
 }
 
@@ -115,6 +123,16 @@ export function buildFieldsPayload(
   }
 
   return payload;
+}
+
+/** The type's `mapping` ({field_key: role}) from the rows' current keys and roles. */
+export function buildMappingPayload(rows: FieldRow[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (key && row.role) mapping[key] = row.role;
+  }
+  return mapping;
 }
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -175,6 +193,9 @@ interface FieldsEditorProps {
    * extra info in the endpoints list (see EndpointAccordionItem.tsx) - only meaningful for
    * endpoint types today. */
   showListVisibility?: boolean;
+  /** When set, each field row gets a Role selector with these roles. A role another row already
+   * has is disabled. */
+  roleOptions?: RoleOption[];
 }
 
 /**
@@ -182,7 +203,7 @@ interface FieldsEditorProps {
  * add/remove/edit rows, and for each row render exactly the controls that
  * make sense for its current type/ui (options, default value, etc).
  */
-export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVisibility }: FieldsEditorProps) {
+export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVisibility, roleOptions }: FieldsEditorProps) {
   // Which rows currently show their validation-constraint inputs (Pattern/Min length/Minimum/
   // etc.) and the "Test this field" sandbox - hidden by default so the common case (no
   // constraints needed) stays uncluttered.
@@ -223,6 +244,8 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
       // and the backend forbids `validation` entirely for type=boolean.
       definition: { ...row.definition, type, ui, options: null, default: null, validation: null },
       optionsText: "",
+      // a role needs a specific field type; drop it when the new type no longer fits
+      role: roleOptions?.find((o) => o.value === row.role)?.fieldType === type ? row.role : null,
     });
   };
 
@@ -382,6 +405,34 @@ export default function FieldsEditor({ rows, onChange, duplicateKeys, showListVi
                     onChange={(val) => updateDefinition(row.id, { show_in_list: val })}
                   />
                   Show in list
+                </label>
+              )}
+
+              {roleOptions && (
+                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground whitespace-nowrap">
+                  Role
+                  <select
+                    aria-label={`Role of field ${trimmedKey}`}
+                    value={row.role ?? ""}
+                    disabled={trimmedKey === ""}
+                    title={trimmedKey === "" ? "Enter a field key first" : undefined}
+                    onChange={(e) => updateRow(row.id, { role: e.target.value || null })}
+                    className="h-8 rounded-md border border-slate-200 bg-muted/30 px-2 text-xs"
+                  >
+                    <option value="">None</option>
+                    {roleOptions.map((opt) => (
+                      <option
+                        key={opt.value}
+                        value={opt.value}
+                        disabled={
+                          opt.fieldType !== row.definition.type ||
+                          rows.some((other) => other.id !== row.id && other.role === opt.value)
+                        }
+                      >
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               )}
             </div>

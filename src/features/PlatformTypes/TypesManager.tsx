@@ -5,8 +5,9 @@ import SimpleDialog from "@/components/Modal/SimpleDialog";
 import Button, { ButtonColor, ButtonSize } from "@/components/Input/Button";
 import { compactInputClass } from "@/features/PlatformTypes/FieldValueInput";
 import { ApiError } from "@/generated/edge-administration/api";
-import TypeFormDialog, { BrowserKindOption, ReservedFieldConfig, TypeFormResult, TypeRecord } from "./TypeFormDialog";
+import TypeFormDialog, { BrowserKindOption, TypeFormResult, TypeRecord } from "./TypeFormDialog";
 import { FieldDefinition } from "./FieldsEditor";
+import type { RoleOption } from "./typeRoles";
 
 export interface TypesManagerProps {
   title: string;
@@ -17,14 +18,13 @@ export interface TypesManagerProps {
   /** When set, the form lets this type be assigned one of these built-in browsers. */
   browserKindOptions?: BrowserKindOption[];
   /** When set, a brand-new type starts pre-populated with these fields instead of a blank row -
-   * used for Device Types, where the default type's fields always apply anyway. */
+   * used for Device Types (the default type's fields always apply anyway) and to pre-fill new
+   * endpoint/service types with their role fields. */
   defaultFields?: Record<string, FieldDefinition>;
-  /** When set, this type always has a built-in field (e.g. "ip" for endpoint types, "port" for
-   * service types) the backend injects automatically. */
-  reservedField?: ReservedFieldConfig;
-  /** Field keys that are entirely backend-managed with nothing to configure (e.g. "name" on
-   * endpoint types) - never shown in the Fields editor at all. */
-  hiddenFieldKeys?: string[];
+  /** Roles of the pre-filled `defaultFields` on a brand-new type ({field_key: role}). */
+  defaultMapping?: Record<string, string>;
+  /** When set, fields get a Role selector and create/update send `mapping`. */
+  roleOptions?: RoleOption[];
   /** When set, each field row gets a "Show in list" toggle controlling whether its value shows
    * as extra info in the endpoints list - only meaningful for endpoint types. */
   supportsListVisibility?: boolean;
@@ -46,6 +46,7 @@ export interface TypesManagerProps {
     description: string | null;
     fields: Record<string, FieldDefinition>;
     browser_kind?: string | null;
+    mapping?: Record<string, string>;
   }) => Promise<unknown>;
   onUpdate: (
     typeId: string,
@@ -54,6 +55,7 @@ export interface TypesManagerProps {
       description: string | null;
       fields: Record<string, FieldDefinition | null>;
       browser_kind?: string | null;
+      mapping?: Record<string, string>;
     }
   ) => Promise<unknown>;
   onDelete: (typeId: string) => Promise<unknown>;
@@ -73,8 +75,8 @@ export default function TypesManager({
   isLoading,
   browserKindOptions,
   defaultFields,
-  reservedField,
-  hiddenFieldKeys,
+  defaultMapping,
+  roleOptions,
   supportsListVisibility,
   protectedTypeId,
   cascadeDelete,
@@ -110,6 +112,7 @@ export default function TypesManager({
           description: result.description,
           fields: result.fields,
           ...(browserKindOptions ? { browser_kind: result.browser_kind } : {}),
+          ...(roleOptions ? { mapping: result.mapping ?? {} } : {}),
         });
         toast.success(`${singularLabel} "${result.label}" updated`);
       } else {
@@ -118,6 +121,7 @@ export default function TypesManager({
           description: result.description,
           fields: nonNullFields(result.fields),
           ...(browserKindOptions ? { browser_kind: result.browser_kind } : {}),
+          ...(roleOptions ? { mapping: result.mapping ?? {} } : {}),
         });
         toast.success(`${singularLabel} "${result.label}" created`);
       }
@@ -237,8 +241,8 @@ export default function TypesManager({
         isPending={isSubmitting}
         browserKindOptions={browserKindOptions}
         defaultFields={defaultFields}
-        reservedField={reservedField}
-        hiddenFieldKeys={hiddenFieldKeys}
+        defaultMapping={defaultMapping}
+        roleOptions={roleOptions}
         supportsListVisibility={supportsListVisibility}
       />
 

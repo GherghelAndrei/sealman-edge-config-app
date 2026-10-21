@@ -10,12 +10,14 @@ import { formatMetadataValue } from "@/features/PlatformTypes/FieldValueInput";
 import AssignEndpointDialog from "./AssignEndpointDialog";
 import AssignServiceDialog from "./AssignServiceDialog";
 import BrowseDialog from "./BrowseDialog";
+import { resolveBrowseTarget } from "@/lib/browserRegistry";
+import { endpointListKey, portListKey } from "./overviewMerge";
+import useGetEndpointTypes from "@/generated/edge-administration/hooks/endpoint_types/useGetEndpointTypes";
+import { endpointTitle, roleFieldKey, titleFieldKeys } from "./endpointDisplay";
 import { withPermissionRequiredTooltip } from "@/features/authorization/permissions/withPermissionRequiredTooltip";
 import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
 
 const GuardedButton = withPermissionRequiredTooltip(Button);
-
-const ALWAYS_SHOWN_ENDPOINT_FIELD_KEYS = new Set(["ip", "name"]);
 
 interface props {
   endpoint: MappedEndpoint;
@@ -32,25 +34,31 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
   // otherwise easy to mistake for a real, already-assigned endpoint (same icon/row styling), so
   // this needs its own visual highlight to make "still needs to be assigned" obvious at a glance.
   const needsAssignment = endpoint.source === "default";
-  // "name" is a regular resolved field (like "ip"), not a top-level property - only present once
-  // there's a real instance ("configured" source).
-  const name = endpoint.endpoint_data?.name?.value as string | undefined;
+  // Roles come from the endpoint's type: the `name`-role value is the title, and the `ip`/`name`
+  // role fields are shown in the title line rather than as extra info.
+  const { data: endpointTypes } = useGetEndpointTypes();
+  const mapping = endpointTypes?.find((t) => t.type_id === endpoint.type_id)?.mapping;
+  const nameKey = roleFieldKey(mapping, "name");
+  const nameValue = nameKey ? endpoint.endpoint_data?.[nameKey]?.value : undefined;
+  const hasName = typeof nameValue === "string" && nameValue.trim() !== "";
+  const title = endpointTitle({ typeLabel: endpoint.type_label, name: nameValue, ip: endpoint.ip });
+  const shownInTitle = titleFieldKeys(mapping);
 
   // Extra endpoint type fields to show next to the IP address - each field's own "Show in
   // endpoints list" toggle (set on the endpoint type's field definition, see FieldsEditor.tsx)
   // decides this, not a separate settings page.
   const extraEndpointInfo = Object.entries(endpoint.endpoint_data ?? {})
-    .filter(([key]) => !ALWAYS_SHOWN_ENDPOINT_FIELD_KEYS.has(key))
+    .filter(([key]) => !shownInTitle.has(key))
     .filter(([, resolved]) => resolved.field?.show_in_list)
     .map(([, resolved]) => (resolved.field ? formatMetadataValue(resolved.value, resolved.field) : null))
     .filter((value): value is string => Boolean(value));
 
   const [assignEndpointOpen, setAssignEndpointOpen] = useState(false);
   const [assignPort, setAssignPort] = useState<MappedPort | null>(null);
-  const [browsingPort, setBrowsingPort] = useState<MappedPort | null>(null);
+  const [browsing, setBrowsing] = useState<{ kind: string; ip: string; port: number } | null>(null);
 
   return (
-    <AccordionItem value={endpoint.ip} className="last:border-b-0">
+    <AccordionItem value={endpointListKey(endpoint)} className="last:border-b-0">
       <div className={`flex items-center pr-4 ${needsAssignment ? "bg-amber-50" : ""}`}>
         <div className="flex-1">
           <AccordionTrigger className="px-4 hover:no-underline hover:bg-muted/40">
@@ -64,7 +72,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                 <div className="text-left">
                   <div className="flex items-center gap-2">
                     <p className={isUnidentified ? "font-medium text-orange-600" : needsAssignment ? "font-medium text-amber-700" : "font-medium"}>
-                      {name ?? endpoint.type_label ?? "Unidentified"}
+                      {title}
                     </p>
                     {needsAssignment && (
                       <Badge variant="outline" className="text-amber-700 border-amber-400 bg-amber-100">
@@ -73,9 +81,9 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {endpoint.type_label && name ? `${endpoint.type_label} · ` : ""}
-                    {endpoint.ip}
-                    {extraEndpointInfo.length > 0 ? ` · ${extraEndpointInfo.join(" · ")}` : ""}
+                    {[endpoint.type_label && hasName ? endpoint.type_label : "", endpoint.ip ?? "", ...extraEndpointInfo]
+                      .filter((part) => part !== "")
+                      .join(" · ")}
                   </p>
                 </div>
               </div>
@@ -139,7 +147,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                 const serviceId = port.service_id;
                 return (
                 <TableRow
-                  key={port.port}
+                  key={portListKey(port)}
                   className={[portNeedsAssignment ? "bg-amber-50" : "", serviceId ? "cursor-pointer hover:bg-muted/40" : ""].join(" ")}
                   onClick={serviceId ? () => onOpenServiceDetails(serviceId) : undefined}
                 >
@@ -147,7 +155,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                     <EndpointStatus value={port.status} type="text" />
                   </TableCell>
                   <TableCell>
-                    <Port value={port.port.toString()} />
+                    <Port value={port.port != null ? port.port.toString() : "-"} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -180,20 +188,25 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
                           Assign
                         </GuardedButton>
                       )}
-                      {port.browser_kind && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={port.status !== "online"}
-                          title={port.status !== "online" ? "Only available while the service is online" : undefined}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBrowsingPort(port);
-                          }}
-                        >
-                          Browse
-                        </Button>
-                      )}
+                      {(() => {
+                        const target = resolveBrowseTarget(endpoint.ip, port.port);
+                        const kind = port.browser_kind;
+                        if (!kind || !target) return null;
+                        return (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={port.status !== "online"}
+                            title={port.status !== "online" ? "Only available while the service is online" : undefined}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBrowsing({ kind, ...target });
+                            }}
+                          >
+                            Browse
+                          </Button>
+                        );
+                      })()}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -208,7 +221,7 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
         open={assignEndpointOpen}
         onOpenChange={setAssignEndpointOpen}
         deviceId={deviceId}
-        ip={endpoint.ip}
+        ip={endpoint.ip ?? undefined}
         defaultTypeId={endpoint.source === "default" ? endpoint.type_id : null}
         onCreated={onCreated}
       />
@@ -218,19 +231,21 @@ export default function EndpointAccordionItem({ endpoint, deviceId, onCreated, o
           open={assignPort !== null}
           onOpenChange={(open) => !open && setAssignPort(null)}
           endpointId={endpoint.endpoint_id}
-          port={assignPort.port}
+          port={assignPort.port ?? undefined}
           defaultTypeId={assignPort.source === "default" ? assignPort.type_id : null}
           onCreated={onCreated}
         />
       )}
 
-      <BrowseDialog
-        open={browsingPort !== null}
-        onOpenChange={(open) => !open && setBrowsingPort(null)}
-        kind={browsingPort?.browser_kind ?? null}
-        ip={endpoint.ip}
-        port={browsingPort?.port ?? 0}
-      />
+      {browsing && (
+        <BrowseDialog
+          open
+          onOpenChange={(open) => !open && setBrowsing(null)}
+          kind={browsing.kind}
+          ip={browsing.ip}
+          port={browsing.port}
+        />
+      )}
     </AccordionItem>
   );
 }

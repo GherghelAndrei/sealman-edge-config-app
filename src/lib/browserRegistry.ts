@@ -36,3 +36,15 @@ export function getBrowser(kind: string): BrowserRegistration | undefined {
 export function listRegisteredBrowsers(): { value: string; label: string }[] {
   return [...registry.entries()].map(([value, { label }]) => ({ value, label }));
 }
+
+/**
+ * The {ip, port} a Browse action opens: `ip` is the endpoint's `ip`-role value, `port` the
+ * service's `port`-role value. Returns null when either is missing - then there is no Browse button.
+ */
+export function resolveBrowseTarget(
+  ip: string | null | undefined,
+  port: number | null | undefined
+): BrowserComponentProps | null {
+  if (!ip || port == null) return null;
+  return { ip, port };
+}

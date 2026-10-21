@@ -12,13 +12,19 @@ import { Button } from "@/components/ui/button";
 import { inputClass, validateFields } from "@/features/PlatformTypes/FieldValueInput";
 import useGetEndpointTypes from "@/generated/edge-administration/hooks/endpoint_types/useGetEndpointTypes";
 import { useUpdateEndpoint } from "@/generated/edge-administration/hooks/endpoints/useUpdateEndpoint";
+import { components } from "@/generated/edge-administration/types";
 import TypeFieldsForm from "./TypeFieldsForm";
+import { initialRetypeValues, nonEmptyValues } from "./retypeData";
+
+type ResolvedField = components["schemas"]["ResolvedField"];
 
 interface props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   endpointId: string;
   currentTypeId: string;
+  /** The endpoint's stored data - matching keys pre-fill the new type's fields. */
+  currentData: Record<string, ResolvedField>;
   onReassigned: () => void;
 }
 
@@ -27,6 +33,7 @@ export default function ReassignEndpointDialog({
   onOpenChange,
   endpointId,
   currentTypeId,
+  currentData,
   onReassigned,
 }: props) {
   const { data: endpointTypes } = useGetEndpointTypes();
@@ -49,14 +56,10 @@ export default function ReassignEndpointDialog({
       setValues({});
       return;
     }
-    // Reassigning to a different type: old instance data was validated against a different
-    // field schema, so it isn't carried over - the new type's own fields start fresh.
-    const initial: Record<string, unknown> = {};
-    for (const [key, definition] of Object.entries(selectedType.fields)) {
-      initial[key] = definition.default ?? null;
-    }
-    setValues(initial);
-  }, [selectedType]);
+    // Retyping keeps all stored data (the API merges the patch onto it). Matching keys start with
+    // their stored value; everything else stays on the endpoint as Custom Fields.
+    setValues(initialRetypeValues(selectedType.fields, currentData));
+  }, [selectedType, currentData]);
 
   const handleSubmit = async () => {
     if (!selectedType) {
@@ -70,7 +73,7 @@ export default function ReassignEndpointDialog({
     }
     setError(null);
     try {
-      await updateEndpoint({ endpointId, body: { type_id: selectedType.type_id, endpoint_data: values } });
+      await updateEndpoint({ endpointId, body: { type_id: selectedType.type_id, endpoint_data: nonEmptyValues(values) } });
       toast.success(`Endpoint reassigned to "${selectedType.label}"`);
       onReassigned();
       onOpenChange(false);
@@ -85,8 +88,8 @@ export default function ReassignEndpointDialog({
         <DialogHeader>
           <DialogTitle>Reassign Endpoint</DialogTitle>
           <DialogDescription>
-            Change the endpoint type for this endpoint. Its existing services stay attached, but instance
-            data must be re-entered for the new type's fields.
+            Change the type of this endpoint. Existing values are kept: values for the new type's fields
+            are pre-filled, everything else stays as Custom Fields.
           </DialogDescription>
         </DialogHeader>
 

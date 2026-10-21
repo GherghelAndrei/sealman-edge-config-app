@@ -15,6 +15,14 @@ import { usePostServiceType } from "@/generated/edge-administration/hooks/servic
 import { useUpdateServiceType } from "@/generated/edge-administration/hooks/service_types/useUpdateServiceType";
 import { useDeleteServiceType } from "@/generated/edge-administration/hooks/service_types/useDeleteServiceType";
 import { listRegisteredBrowsers } from "@/lib/browserRegistry";
+import {
+  ENDPOINT_ROLE_OPTIONS,
+  ENDPOINT_TYPE_DEFAULT_FIELDS,
+  ENDPOINT_TYPE_DEFAULT_MAPPING,
+  SERVICE_ROLE_OPTIONS,
+  SERVICE_TYPE_DEFAULT_FIELDS,
+  SERVICE_TYPE_DEFAULT_MAPPING,
+} from "@/features/PlatformTypes/typeRoles";
 
 export default function PlatformTypesSettings() {
   const deviceTypesQuery = useGetDeviceTypes();
@@ -81,12 +89,13 @@ export default function PlatformTypesSettings() {
           description="Types available when creating endpoints on a device."
           types={endpointTypesQuery.data ?? []}
           isLoading={endpointTypesQuery.isLoading}
-          reservedField={{ key: "ip", label: "IP Address", type: "string" }}
-          hiddenFieldKeys={["name"]}
+          defaultFields={ENDPOINT_TYPE_DEFAULT_FIELDS}
+          defaultMapping={ENDPOINT_TYPE_DEFAULT_MAPPING}
+          roleOptions={ENDPOINT_ROLE_OPTIONS}
           supportsListVisibility
           cascadeDelete={{ instancesLabel: "endpoint" }}
           onCreate={async (body) => {
-            await postEndpointType(body);
+            await postEndpointType({ ...body, mapping: body.mapping ?? {} });
             await endpointTypesQuery.refetch();
           }}
           onUpdate={async (typeId, body) => {
@@ -106,10 +115,12 @@ export default function PlatformTypesSettings() {
           types={serviceTypesQuery.data ?? []}
           isLoading={serviceTypesQuery.isLoading}
           browserKindOptions={listRegisteredBrowsers()}
-          reservedField={{ key: "port", label: "Port", type: "integer" }}
+          defaultFields={SERVICE_TYPE_DEFAULT_FIELDS}
+          defaultMapping={SERVICE_TYPE_DEFAULT_MAPPING}
+          roleOptions={SERVICE_ROLE_OPTIONS}
           cascadeDelete={{ instancesLabel: "service" }}
           onCreate={async (body) => {
-            await postServiceType(body);
+            await postServiceType({ ...body, mapping: body.mapping ?? {} });
             await serviceTypesQuery.refetch();
           }}
           onUpdate={async (typeId, body) => {
