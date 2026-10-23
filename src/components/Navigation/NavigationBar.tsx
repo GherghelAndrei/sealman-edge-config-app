@@ -41,6 +41,11 @@ export default function NavigationBar() {
         href: "/deployments",
         current: true,
       },
+      {
+        name: "Edge Deployments (mockup)",
+        href: "/mockups/deployments",
+        current: true,
+      },
     ];
 
     if (!isPermissionsLoading && hasAuthorizationReadPermission) {

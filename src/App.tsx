@@ -27,6 +27,13 @@ import Roles from "./features/authorization/Roles";
 import Scopes from "./features/authorization/Scopes";
 import Users from "./features/authorization/Users";
 import UserProfile from "./pages/UserProfile";
+import MockDeploymentsList from "./features/DeploymentsMockup/MockDeploymentsList";
+import MockDeploymentDetail from "./features/DeploymentsMockup/MockDeploymentDetail";
+import MockVersionEditor from "./features/DeploymentsMockup/MockVersionEditor";
+import MockRuleEditor from "./features/DeploymentsMockup/MockRuleEditor";
+import MockDevicesList from "./features/DeploymentsMockup/MockDevicesList";
+import { MockLayout } from "./features/DeploymentsMockup/components";
+import MockDeviceDeployment from "./features/DeploymentsMockup/MockDeviceDeployment";
 
 export default function App() {
   const auth = useAuth();
@@ -64,6 +71,17 @@ export default function App() {
                 <Route index element={<DeploymentDetails />} />
                 <Route path="services/:serviceId" element={<ServiceDetails />} />
               </Route>
+            </Route>
+
+            {/* Static UI mockups for IoT Edge deployments (no API calls) */}
+            <Route path="mockups" element={<MockLayout />}>
+              <Route path="deployments" element={<MockDeploymentsList />} />
+              <Route path="deployments/:deploymentId" element={<MockDeploymentDetail />} />
+              <Route path="deployments/:deploymentId/versions/new" element={<MockVersionEditor />} />
+              <Route path="deployments/:deploymentId/rules/new" element={<MockRuleEditor />} />
+              <Route path="deployments/:deploymentId/rules/:ruleId" element={<MockRuleEditor />} />
+              <Route path="devices" element={<MockDevicesList />} />
+              <Route path="devices/:deviceId" element={<MockDeviceDeployment />} />
             </Route>
 
             <Route path="authorization" element={<Authorization />}>
