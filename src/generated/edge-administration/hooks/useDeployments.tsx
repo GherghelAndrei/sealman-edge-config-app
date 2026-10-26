@@ -5,7 +5,7 @@ export function useListDeployments() {
 }
 
 export function useGetActiveDeployment() {
-    return edgeApi.useQuery("get", "/active-deployments")
+    return edgeApi.useQuery("get", "/active-deployment")
 }
 
 export function useGetDeployment(name: string) {
@@ -17,15 +17,15 @@ export function useGetDeployment(name: string) {
 }
 
 export function useCreateOrUpdateDeployment() {
-    return edgeApi.useMutation("put", "/compose-deployments")
+    return edgeApi.useMutation("put", "/compose-deployments/{name}")
 }
 
 export function useSetActiveDeployment() {
-    return edgeApi.useMutation("post", "/active-deployments/{name}")
+    return edgeApi.useMutation("put", "/active-deployment/{name}")
 }
 
 export function useDeleteActiveDeployment() {
-    return edgeApi.useMutation("delete", "/active-deployments")
+    return edgeApi.useMutation("delete", "/active-deployment")
 }
 
 export function useDeleteDeployment() {

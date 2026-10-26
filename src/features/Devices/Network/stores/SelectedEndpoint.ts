@@ -47,7 +47,7 @@ export default create<SelectedEndpointStore>((set) => {
       const endpointTypesArr = getEndpointTypes() ?? []
       let machineNameIndex = endpointTypesArr?.findIndex(obj => obj.defaultIP === selectedIp)
       let currentMachineName = endpointTypesArr[machineNameIndex]?.name
-      let currentMachineDescription = endpointTypesArr[machineNameIndex]?.description
+      let currentMachineDescription = endpointTypesArr[machineNameIndex]?.description ?? undefined
 
       const portServiceMap = getPortServiceMap()
       const mergedServices: Record<string, string> = {}
