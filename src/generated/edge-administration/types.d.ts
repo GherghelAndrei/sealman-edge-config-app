@@ -1319,6 +1319,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/with-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Devices With Data Route */
+        get: operations["get_devices_with_data_route_devices_with_data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{device_id}": {
         parameters: {
             query?: never;
@@ -1367,7 +1384,7 @@ export interface paths {
         put?: never;
         /**
          * Register a new extension
-         * @description Persists an extension's manifest with enabled=false. A freshly-registered extension is inert - no routes are mounted until it is enabled.
+         * @description Persists an extension's manifest with enabled=false. A freshly-registered extension is disabled by default; no routes are mounted until it is enabled.
          */
         post: operations["register_extension_extensions_post"];
         delete?: never;
@@ -1396,6 +1413,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extensions/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List enabled extensions (names only)
+         * @description Open to any authenticated user (no ABAC action): the app uses it to discover which extensions to ask for their own `/<name>/ui`. Names only, sorted.
+         */
+        get: operations["list_enabled_extensions_extensions_enabled_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/extensions/{name}": {
         parameters: {
             query?: never;
@@ -1407,7 +1444,7 @@ export interface paths {
         get: operations["get_extension_extensions__name__get"];
         /**
          * Replace an extension's manifest
-         * @description Replaces the entire manifest in one database transaction; never changes `enabled`. If the extension is currently enabled, its routes are rebuilt and swapped in after that commit; if they cannot be built, the extension is disabled. Refuses (409) to drop an action still granted to a role - clean up role grants first (DELETE, by contrast, strips grants).
+         * @description Replaces the entire manifest in one database transaction; never changes `enabled`. If the extension is currently enabled, its routes are rebuilt and swapped in after that commit; if they cannot be built, the extension is disabled. Refuses (409) to drop an action still
          */
         put: operations["replace_extension_extensions__name__put"];
         post?: never;
@@ -1472,7 +1509,7 @@ export interface paths {
         put?: never;
         /**
          * Check an extension's upstream health now
-         * @description Runs a fresh health check of every one of this extension's upstreams and persists the result. A plain GET never triggers a check on its own - it only ever returns whatever was last persisted here. Gated by extension.read, not extension.register: this refreshes a status the settings page shows, it does not change the manifest.
+         * @description Runs a fresh health check of every one of this extension's upstreams and persists the result. A plain GET never triggers a check on its own, it only ever returns whatever was last persisted here. Gated by extension.read, not extension.register: this refreshes a status the settings page shows, it does not change the manifest.
          */
         post: operations["check_extension_health_extensions__name__health_check_post"];
         delete?: never;
@@ -1492,7 +1529,7 @@ export interface paths {
         put?: never;
         /**
          * Rotate an extension's internal key
-         * @description Issues a fresh X-Internal-Key and invalidates the previous one immediately. The raw key is only ever returned here - never re-readable via GET.
+         * @description Issues a fresh X-Internal-Key and invalidates the previous one immediately. The raw key is only ever returned here. Never re-readable via GET.
          */
         post: operations["rotate_internal_key_extensions__name__internal_key_rotate_post"];
         delete?: never;
@@ -2072,6 +2109,11 @@ export interface components {
              */
             messageFormat: "csi:1.0";
             applicationData?: components["schemas"]["ApplicationData-Output"] | null;
+        };
+        /** EnabledExtension */
+        EnabledExtension: {
+            /** Name */
+            name: string;
         };
         /** Endpoint */
         Endpoint: {
@@ -7611,6 +7653,26 @@ export interface operations {
             };
         };
     };
+    get_devices_with_data_route_devices_with_data_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_device_route_devices__device_id__get: {
         parameters: {
             query?: never;
@@ -7795,6 +7857,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    list_enabled_extensions_extensions_enabled_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnabledExtension"][];
                 };
             };
         };
