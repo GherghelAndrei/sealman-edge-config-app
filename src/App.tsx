@@ -16,6 +16,10 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import PlatformTypesSettings from "./pages/settings/PlatformTypesSettings";
 import TemplatesSettings from "./pages/settings/TemplatesSettings";
+import ExtensionsSettings from "./features/Extensions/ExtensionsSettings";
+import ExtensionDetail from "./features/Extensions/ExtensionDetail";
+import RegisterExtensionPage from "./features/Extensions/RegisterExtensionPage";
+import EditExtensionPage from "./features/Extensions/EditExtensionPage";
 import { useAuth } from "./auth";
 import { useEffect } from "react";
 import { NewUserCheck } from "./components/NewUserCheck";
@@ -37,6 +41,18 @@ export default function App() {
       auth.signIn();
     }
   }, [auth, auth.isAuthenticated, auth.isLoading]);
+
+  // Do not mount routes (or their react-query hooks) until OIDC has a user.
+  // Otherwise axios/openapi middleware call getAccessToken() while sessionStorage
+  // is still empty, throw "User is not authenticated", and the UI treats the
+  // backend as unauthenticated even after login completes.
+  if (auth.isLoading || !auth.isAuthenticated) {
+    return (
+      <div className="flex h-screen items-center justify-center text-sm text-gray-500">
+        {auth.isLoading ? "Loading..." : "Redirecting to sign in..."}
+      </div>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -77,6 +93,14 @@ export default function App() {
             <Route path="settings" element={<SettingsLayout />}>
               <Route path="platform-types" element={<PlatformTypesSettings />} />
               <Route path="templates" element={<TemplatesSettings />} />
+              <Route path="extensions" element={<Outlet />}>
+                <Route index element={<ExtensionsSettings />} />
+                <Route path="new" element={<RegisterExtensionPage />} />
+                <Route path=":name" element={<Outlet />}>
+                  <Route index element={<ExtensionDetail />} />
+                  <Route path="edit" element={<EditExtensionPage />} />
+                </Route>
+              </Route>
               {/* <Route path="smartems" element={<SmartEmsSettings />} /> */}
             </Route>
             <Route path="user/profile" element={<UserProfile />} />

@@ -14,6 +14,9 @@ export const PERMISSION_KEYS = {
   DEVICE_METADATA_WRITE: "device.metadata.write",
   DEVICE_ENDPOINT_READ: "device.endpoint.read",
   DEVICE_ENDPOINT_WRITE: "device.endpoint.write",
+  EXTENSION_READ: "extension.read",
+  EXTENSION_REGISTER: "extension.register",
+  EXTENSION_DEREGISTER: "extension.deregister",
 } as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[keyof typeof PERMISSION_KEYS];

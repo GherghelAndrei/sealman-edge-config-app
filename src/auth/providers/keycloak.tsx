@@ -23,6 +23,9 @@ export const userManager = new UserManager({
   client_id: CLIENT_ID,
   redirect_uri: `${window.location.origin}`,
   post_logout_redirect_uri: window.location.origin,
+  // ec-api-scope is optional on the ec-app client; requesting it adds the
+  // "ec-api" audience the backend verifies in auth.verify_token().
+  scope: "openid profile email ec-api-scope",
   userStore: new WebStorageStateStore({ store: window.sessionStorage }),
   monitorSession: true,
   automaticSilentRenew: true,
@@ -94,9 +97,13 @@ export async function getTokenAsync(): Promise<string> {
  * Note: For Keycloak, scopes are set at login time
  */
 async function getAccessToken(): Promise<string> {
-  const user = await userManager.getUser();
+  let user = await userManager.getUser();
 
-  if (!user) {
+  if (user?.expired) {
+    user = await userManager.signinSilent();
+  }
+
+  if (!user?.access_token) {
     throw new Error("No user authenticated");
   }
 

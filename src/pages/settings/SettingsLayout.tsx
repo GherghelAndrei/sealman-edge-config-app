@@ -14,6 +14,10 @@ const SETTINGS_TABS: SettingsTab[] = [
     label: "Templates",
     path: "templates",
   },
+  {
+    label: "Extensions",
+    path: "extensions",
+  },
   // {
   //   label: "Smart EMS",
   //   path: "smartems",
