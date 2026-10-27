@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 import { ArrowLeft, ChevronRight, Loader2, Plus, Repeat, Server, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,8 +19,31 @@ import ReassignEndpointDialog from "./ReassignEndpointDialog";
 import { withPermissionRequiredTooltip } from "@/features/authorization/permissions/withPermissionRequiredTooltip";
 import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
 import { endpointTitle, roleFieldKey } from "./endpointDisplay";
+import { usePermissions } from "@/features/authorization/permissions/use-permissions";
+import ExtensionSlot from "@/features/Extensions/slots/ExtensionSlot";
+import { EXTENSION_SLOTS } from "@/features/Extensions/slots/slots";
 
 const GuardedButton = withPermissionRequiredTooltip(Button);
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every(
+    (k) => k in b && deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+  );
+}
+
+function toValues(endpointData: Record<string, { value?: unknown }>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, resolved] of Object.entries(endpointData)) {
+    out[key] = resolved.value ?? null;
+  }
+  return out;
+}
 
 interface props {
   endpointId: string;
@@ -34,7 +58,9 @@ export default function EndpointDetailsPage({ endpointId, onBack, onOpenServiceD
   const { data: endpointTypes } = useGetEndpointTypes();
   const { data: services, refetch: refetchServices } = useGetServices({ endpointId });
   const { updateEndpoint, isPending: isSaving } = useUpdateEndpoint();
+  const queryClient = useQueryClient();
   const { deleteEndpoint, isPending: isDeleting } = useDeleteEndpoint();
+  const { hasPermission: canWrite } = usePermissions({ deviceId, permissionKey: PERMISSION_KEYS.DEVICE_ENDPOINT_WRITE });
 
   const type = (endpointTypes ?? []).find((t) => t.type_id === endpoint?.type_id);
   const nameKey = roleFieldKey(type?.mapping, "name");
@@ -51,16 +77,16 @@ export default function EndpointDetailsPage({ endpointId, onBack, onOpenServiceD
   // gets reassigned to a different type - not on every background refetch of the same one/type,
   // which would otherwise wipe in-progress edits.
   const initializedForRef = useRef<string | null>(null);
+  // Values as last loaded from the server; lets us tell user edits apart from server-side changes.
+  const baselineRef = useRef<Record<string, unknown>>({});
 
   useEffect(() => {
     if (!endpoint) return;
     const initializationKey = `${endpoint.endpoint_id}:${endpoint.type_id}`;
     if (initializedForRef.current === initializationKey) return;
     initializedForRef.current = initializationKey;
-    const initial: Record<string, unknown> = {};
-    for (const [key, resolved] of Object.entries(endpoint.endpoint_data)) {
-      initial[key] = resolved.value ?? null;
-    }
+    const initial = toValues(endpoint.endpoint_data);
+    baselineRef.current = initial;
     setValues(initial);
     setDeletedKeys(new Set());
     setIsDirty(false);
@@ -110,12 +136,46 @@ export default function EndpointDetailsPage({ endpointId, onBack, onOpenServiceD
       toast.success("Endpoint updated");
       setDeletedKeys(new Set());
       setIsDirty(false);
-      await refetch();
+      const saved = await refetch();
+      if (saved?.data) baselineRef.current = toValues(saved.data.endpoint_data);
       onUpdated();
     } catch {
       toast.error("Failed to update endpoint");
     }
   };
+
+  // An extension panel changed this endpoint's data on the server: pull in the fresh values for
+  // every key the user has not edited, and keep unsaved user edits untouched.
+  const handleExtensionDataChanged = async () => {
+    const result = await refetch();
+    // The panel's write succeeded regardless of whether our refetch did.
+    queryClient.invalidateQueries({ queryKey: ["get", "/{device}/metadata"] });
+    // refetch resolves (not rejects) with status "error" and the stale data.
+    if (!result?.data || result.isError) return;
+    // The user may have switched endpoints while the refetch was in flight.
+    if (initializedForRef.current !== `${result.data.endpoint_id}:${result.data.type_id}`) return;
+    const fresh = toValues(result.data.endpoint_data);
+    const baseline = baselineRef.current;
+    baselineRef.current = fresh;
+    setValues((current) => {
+      const next: Record<string, unknown> = {};
+      const keys = new Set([...Object.keys(baseline), ...Object.keys(fresh), ...Object.keys(current)]);
+      for (const key of keys) {
+        const untouched = deepEqual(current[key], baseline[key]) && (key in current) === (key in baseline);
+        const take = untouched ? fresh : current;
+        if (key in take) next[key] = take[key];
+      }
+      return next;
+    });
+    onUpdated();
+  };
+
+  // Hand the slot a stable callback so panel props do not change on every host render.
+  const extensionDataChangedRef = useRef(handleExtensionDataChanged);
+  useEffect(() => {
+    extensionDataChangedRef.current = handleExtensionDataChanged;
+  });
+  const onExtensionDataChanged = useCallback(() => extensionDataChangedRef.current(), []);
 
   const handleDelete = async () => {
     try {
@@ -251,6 +311,20 @@ export default function EndpointDetailsPage({ endpointId, onBack, onOpenServiceD
               </div>
             </div>
           </div>
+
+          <ExtensionSlot
+            name={EXTENSION_SLOTS.endpointDetails.name}
+            context={{ deviceId, endpointId, endpointTypeId: endpoint.type_id, mode: canWrite ? "edit" : "view" }}
+            onDataChanged={onExtensionDataChanged}
+            renderFrame={(label, panel) => (
+              <div className="border rounded-lg overflow-hidden bg-background">
+                <div className="px-4 py-3 border-b">
+                  <h3 className="text-sm font-semibold">{label}</h3>
+                </div>
+                <div className="p-4">{panel}</div>
+              </div>
+            )}
+          />
 
           <div className="border rounded-lg overflow-hidden bg-background">
             <div className="px-4 py-3 border-b flex items-center justify-between">
