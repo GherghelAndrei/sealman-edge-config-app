@@ -64,6 +64,8 @@ export interface ExtensionFormDraft {
   upstreams: UpstreamDraft[];
   actions: ActionDraft[];
   routes: RouteDraft[];
+  /** Carried through unchanged: the form has no UI editor, but PUT replaces the whole manifest. */
+  ui?: ExtensionRegistration["ui"];
 }
 
 export function emptyUpstream(): UpstreamDraft {
@@ -186,6 +188,7 @@ export function draftFromRegistration(reg: ExtensionRegistration): ExtensionForm
     upstreams: Object.entries(reg.upstreams ?? {}).map(([key, spec]) => upstreamToDraft(key, spec)),
     actions: (reg.actions ?? []).map((a) => ({ id: newId(), name: a.name, description: a.description ?? "" })),
     routes: (reg.routes ?? []).map(routeToDraft),
+    ...(reg.ui ? { ui: reg.ui } : {}),
   };
 }
 
@@ -372,6 +375,7 @@ export function draftToRegistration(draft: ExtensionFormDraft): DraftConversionR
       upstreams,
       actions,
       routes,
+      ...(draft.ui ? { ui: draft.ui } : {}),
     },
   };
 }

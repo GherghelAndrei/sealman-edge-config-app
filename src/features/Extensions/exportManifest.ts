@@ -21,6 +21,7 @@ export function toAuthorManifest(registration: ExtensionRegistration): Extension
     upstreams: registration.upstreams,
     actions: registration.actions,
     routes,
+    ...(registration.ui ? { ui: registration.ui } : {}),
   };
 }
 

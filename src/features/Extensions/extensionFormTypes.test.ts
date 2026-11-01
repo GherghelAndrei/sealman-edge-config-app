@@ -1,6 +1,7 @@
+import { toAuthorManifest } from "./exportManifest";
 import {
-  draftToRegistration,
   draftFromRegistration,
+  draftToRegistration,
   emptyDraft,
   emptyRoute,
   emptyUpstream,
@@ -22,7 +23,27 @@ function validDraft(): ExtensionFormDraft {
   return draft;
 }
 
+function validRegistration() {
+  const registration = draftToRegistration(validDraft()).registration;
+  if (!registration) throw new Error("fixture draft must be valid");
+  return registration;
+}
+
 describe("extension manifest form contract", () => {
+  it("keeps the ui section through the edit form round trip", () => {
+    const reg = {
+      ...validRegistration(),
+      ui: {
+        contractVersion: 1 as const,
+        entry: "/ext-ui/a/remoteEntry.js",
+        remoteName: "a",
+        contributions: [{ target: "global", placement: "section", module: "./P", label: "A" }],
+      },
+    };
+    expect(draftToRegistration(draftFromRegistration(reg)).registration?.ui).toEqual(reg.ui);
+    expect(toAuthorManifest(reg).ui).toEqual(reg.ui);
+  });
+
   it("matches the backend method set and device scope default", () => {
     expect(HTTP_METHODS).toEqual(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
     expect(emptyRoute().scope_param).toBe("device_id");
