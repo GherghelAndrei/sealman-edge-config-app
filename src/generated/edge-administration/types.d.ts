@@ -1353,6 +1353,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/with-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Devices With Data Route */
+        get: operations["get_devices_with_data_route_devices_with_data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{device_id}": {
         parameters: {
             query?: never;
@@ -1401,7 +1418,7 @@ export interface paths {
         put?: never;
         /**
          * Register a new extension
-         * @description Persists an extension's manifest with enabled=false. A freshly-registered extension is inert - no routes are mounted until it is enabled.
+         * @description Persists an extension's manifest with enabled=false. A freshly-registered extension is disabled by default; no routes are mounted until it is enabled.
          */
         post: operations["register_extension_extensions_post"];
         delete?: never;
@@ -1430,6 +1447,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extensions/ui": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * UI sections of enabled extensions
+         * @description Open to any authenticated user (no ABAC action). Lists the `ui` section of every enabled extension; a contribution with `requiredAction` is returned only to users who hold that action in any team role (scope ignored). Cached privately for 60s; honours `If-None-Match`.
+         */
+        get: operations["list_extension_uis_extensions_ui_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/extensions/{name}": {
         parameters: {
             query?: never;
@@ -1441,7 +1478,7 @@ export interface paths {
         get: operations["get_extension_extensions__name__get"];
         /**
          * Replace an extension's manifest
-         * @description Replaces the entire manifest in one database transaction; never changes `enabled`. If the extension is currently enabled, its routes are rebuilt and swapped in after that commit; if they cannot be built, the extension is disabled. Refuses (409) to drop an action still granted to a role - clean up role grants first (DELETE, by contrast, strips grants).
+         * @description Replaces the entire manifest in one database transaction; never changes `enabled`. If the extension is currently enabled, its routes are rebuilt and swapped in after that commit; if they cannot be built, the extension is disabled. Refuses (409) to drop an action still
          */
         put: operations["replace_extension_extensions__name__put"];
         post?: never;
@@ -1506,7 +1543,7 @@ export interface paths {
         put?: never;
         /**
          * Check an extension's upstream health now
-         * @description Runs a fresh health check of every one of this extension's upstreams and persists the result. A plain GET never triggers a check on its own - it only ever returns whatever was last persisted here. Gated by extension.read, not extension.register: this refreshes a status the settings page shows, it does not change the manifest.
+         * @description Runs a fresh health check of every one of this extension's upstreams and persists the result. A plain GET never triggers a check on its own, it only ever returns whatever was last persisted here. Gated by extension.read, not extension.register: this refreshes a status the settings page shows, it does not change the manifest.
          */
         post: operations["check_extension_health_extensions__name__health_check_post"];
         delete?: never;
@@ -1526,7 +1563,7 @@ export interface paths {
         put?: never;
         /**
          * Rotate an extension's internal key
-         * @description Issues a fresh X-Internal-Key and invalidates the previous one immediately. The raw key is only ever returned here - never re-readable via GET.
+         * @description Issues a fresh X-Internal-Key and invalidates the previous one immediately. The raw key is only ever returned here. Never re-readable via GET.
          */
         post: operations["rotate_internal_key_extensions__name__internal_key_rotate_post"];
         delete?: never;
@@ -2315,6 +2352,7 @@ export interface components {
             actions?: components["schemas"]["ActionSpec"][];
             /** Routes */
             routes: components["schemas"]["RouteDetail"][];
+            ui?: components["schemas"]["ExtensionUi"] | null;
             /**
              * Enabled
              * @default false
@@ -2352,6 +2390,37 @@ export interface components {
             actions?: components["schemas"]["ActionSpec"][];
             /** Routes */
             routes: components["schemas"]["RouteSpec"][];
+            ui?: components["schemas"]["ExtensionUi"] | null;
+        };
+        /** ExtensionUi */
+        ExtensionUi: {
+            /**
+             * Contractversion
+             * @constant
+             */
+            contractVersion: 1;
+            /** Entry */
+            entry: string;
+            /** Remotename */
+            remoteName: string;
+            /** Contributions */
+            contributions: components["schemas"]["UiContribution"][];
+        };
+        /** ExtensionUiEntry */
+        ExtensionUiEntry: {
+            /** Name */
+            name: string;
+            /**
+             * Contractversion
+             * @constant
+             */
+            contractVersion: 1;
+            /** Entry */
+            entry: string;
+            /** Remotename */
+            remoteName: string;
+            /** Contributions */
+            contributions: components["schemas"]["UiContribution"][];
         };
         /** FWShow */
         FWShow: {
@@ -4029,6 +4098,25 @@ export interface components {
             x: number;
             /** Y */
             y: number;
+        };
+        /** UiContribution */
+        UiContribution: {
+            /** Target */
+            target: string;
+            /** Placement */
+            placement: string;
+            /** Module */
+            module: string;
+            /** Label */
+            label: string;
+            /** When */
+            when?: {
+                [key: string]: string[];
+            } | null;
+            /** Path */
+            path?: string | null;
+            /** Requiredaction */
+            requiredAction?: string | null;
         };
         /**
          * UpstreamHealthStatus
@@ -7828,6 +7916,26 @@ export interface operations {
             };
         };
     };
+    get_devices_with_data_route_devices_with_data_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_device_route_devices__device_id__get: {
         parameters: {
             query?: never;
@@ -8012,6 +8120,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    list_extension_uis_extensions_ui_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionUiEntry"][];
                 };
             };
         };
