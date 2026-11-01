@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes, useParams } from "react-router-dom";
 import {
   Cog6ToothIcon,
   InformationCircleIcon,
+  PuzzlePieceIcon,
   ServerStackIcon,
   ShieldCheckIcon,
   Squares2X2Icon,
@@ -21,6 +22,10 @@ import DeviceHeader from "./DeviceHeader";
 import RemoteAccess from "./Vpn/RemoteAccess";
 import DevicePanel from "./DevicePanel";
 import { LoadingState } from "@/components/ui/page-state";
+import useGetDeviceMetadata from "@/generated/edge-administration/hooks/device_metadata/useGetDeviceMetadata";
+import RoutedExtensionPanel from "@/features/Extensions/outlets/RoutedExtensionPanel";
+import { useNavContributions } from "@/features/Extensions/outlets/useNavContributions";
+import { useOutletUser } from "@/features/Extensions/outlets/useOutletUser";
 
 function Panel({ children }: { children: ReactNode }) {
   return <div className="rounded-lg border bg-white p-4">{children}</div>;
@@ -33,12 +38,20 @@ export default function DeviceDetail() {
 
   const { hasPermission, noPermissionsMessage, isLoading } = usePermissions({ deviceId: deviceId, permissionKey: PERMISSION_KEYS.DEVICE_READ });
 
+  const user = useOutletUser();
+  const metadata = useGetDeviceMetadata(deviceId ?? "");
+  const deviceTypeId = metadata.data?.typeId ?? "";
+  const { hasPermission: canEdit } = usePermissions({ deviceId, permissionKey: PERMISSION_KEYS.DEVICE_METADATA_WRITE });
+  const tabContext = { user, deviceId: deviceId ?? "", deviceTypeId, canEdit };
+  const extensionTabs = useNavContributions("device", "tab", tabContext);
+
   const menu = [
     { title: "Info", href: "", icon: InformationCircleIcon, end: true },
     { title: "Device Config", href: "device-config", icon: Cog6ToothIcon },
     { title: "Assets", href: "assets", icon: ServerStackIcon },
     { title: "Applications", href: "applications", icon: Squares2X2Icon },
     { title: "Remote Access", href: "remote-access", icon: ShieldCheckIcon },
+    ...extensionTabs.map((t) => ({ title: t.label, href: t.to, icon: PuzzlePieceIcon })),
   ];
 
   if (isLoading) {
@@ -65,7 +78,7 @@ export default function DeviceDetail() {
         <div className="flex gap-1 overflow-x-auto">
           {menu.map((item) => (
             <NavLink
-              key={item.title}
+              key={item.href}
               to={item.href ? `${base}/${item.href}` : base}
               end={item.end}
               className={({ isActive }) =>
@@ -121,6 +134,17 @@ export default function DeviceDetail() {
               }
             />
             <Route path="remote-access/*" element={<RemoteAccess />} />
+            <Route
+              path="x/:ext/:path/*"
+              element={
+                // wait for the device type: panels must not see an empty deviceTypeId, nor "not found" early
+                metadata.isLoading ? (
+                  <LoadingState label="Loading device..." />
+                ) : (
+                  <RoutedExtensionPanel target="device" placement="tab" context={tabContext} />
+                )
+              }
+            />
             <Route path="vpn" element={<Navigate to={`${base}/remote-access/vpn`} replace />} />
             <Route
               path="opcua"

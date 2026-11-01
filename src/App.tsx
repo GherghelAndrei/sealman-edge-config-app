@@ -26,6 +26,8 @@ import RegisterExtensionPage from "./features/Extensions/RegisterExtensionPage";
 import EditExtensionPage from "./features/Extensions/EditExtensionPage";
 import ExtensionAccess from "./features/Extensions/ExtensionAccess";
 import { PERMISSION_KEYS } from "./features/authorization/permissions/permission-keys";
+import RoutedExtensionPanel from "./features/Extensions/outlets/RoutedExtensionPanel";
+import { useOutletUser } from "./features/Extensions/outlets/useOutletUser";
 import { useAuth } from "./auth";
 import { useEffect } from "react";
 import { NewUserCheck } from "./components/NewUserCheck";
@@ -35,6 +37,11 @@ import Roles from "./features/authorization/Roles";
 import Scopes from "./features/authorization/Scopes";
 import Users from "./features/authorization/Users";
 import UserProfile from "./pages/UserProfile";
+
+function ExtensionPage() {
+  const user = useOutletUser();
+  return <RoutedExtensionPanel target="global" placement="page" context={{ user }} />;
+}
 
 export default function App() {
   const auth = useAuth();
@@ -154,6 +161,7 @@ export default function App() {
               </Route>
               {/* <Route path="smartems" element={<SmartEmsSettings />} /> */}
             </Route>
+            <Route path="x/:ext/:path/*" element={<ExtensionPage />} />
             <Route path="user/profile" element={<UserProfile />} />
             <Route path="version" element={<Version />} />
             <Route path="*" element={<PageNotFound />} />
