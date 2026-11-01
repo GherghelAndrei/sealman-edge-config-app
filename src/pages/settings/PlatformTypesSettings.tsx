@@ -3,6 +3,8 @@ import PageTitle from "@/components/Typography/PageTitle";
 import TypesManager from "@/features/PlatformTypes/TypesManager";
 import DeviceTableColumnsCard from "@/features/PlatformTypes/DeviceTableColumnsCard";
 import DefaultScanPortsCard from "@/features/PlatformTypes/DefaultScanPortsCard";
+import ExtensionOutlet from "@/features/Extensions/outlets/ExtensionOutlet";
+import { useOutletUser } from "@/features/Extensions/outlets/useOutletUser";
 import useGetDeviceTypes from "@/generated/edge-administration/hooks/device_types/useGetDeviceTypes";
 import { usePostDeviceType } from "@/generated/edge-administration/hooks/device_types/usePostDeviceType";
 import { useUpdateDeviceType } from "@/generated/edge-administration/hooks/device_types/useUpdateDeviceType";
@@ -26,6 +28,7 @@ import {
 } from "@/features/PlatformTypes/typeRoles";
 
 export default function PlatformTypesSettings() {
+  const user = useOutletUser();
   const deviceTypesQuery = useGetDeviceTypes();
   const { postDeviceType } = usePostDeviceType();
   const { updateDeviceType } = useUpdateDeviceType();
@@ -132,6 +135,9 @@ export default function PlatformTypesSettings() {
         />
 
         <DefaultScanPortsCard />
+
+        {/* Extensions contribute their own platform-configuration cards here (e.g. fields they need). */}
+        <ExtensionOutlet target="global" placement="section" context={{ user }} />
       </div>
     </div>
   );
