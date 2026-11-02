@@ -44,6 +44,18 @@ describe("extension manifest form contract", () => {
     expect(toAuthorManifest(reg).ui).toEqual(reg.ui);
   });
 
+  it("fills backend defaults for fields a pasted manifest leaves out", () => {
+    const pasted = {
+      name: "catalog",
+      upstreams: { svc: { type: "http", base_url: "http://catalog-service:8080" } },
+      routes: [{ upstream: "svc", path: "/catalog", method: "GET", query_params: [{ name: "q" }] }],
+    } as unknown as Parameters<typeof draftFromRegistration>[0];
+    const result = draftToRegistration(draftFromRegistration(pasted));
+    expect(result.errors).toEqual([]);
+    expect(result.registration?.upstreams.svc).toMatchObject({ health_path: "/health", version_field: "version" });
+    expect(result.registration?.routes?.[0].query_params?.[0]).toMatchObject({ type: "string", required: true });
+  });
+
   it("matches the backend method set and device scope default", () => {
     expect(HTTP_METHODS).toEqual(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
     expect(emptyRoute().scope_param).toBe("device_id");
