@@ -77,7 +77,7 @@ export default function App() {
             <Route path="platform-types" element={<AssetConfigurationLayout />}>
               <Route index element={<Navigate to="asset-types" replace />} />
               <Route path="asset-types" element={<PlatformTypesSettings />} />
-              <Route path="templates" element={<TemplatesSettings />} />
+              <Route path="templates" element={<Navigate to="/settings/templates" replace />} />
             </Route>
             <Route path="deployments" element={<DeploymentsLayout />}>
               <Route index element={<Navigate to="management" replace />} />
@@ -123,7 +123,7 @@ export default function App() {
             <Route path="settings/smartems" element={<SmartEmsAuthCallback />} />
             <Route path="settings" element={<SettingsLayout />}>
               <Route index element={<Navigate to="seal-agent" replace />} />
-              <Route path="platform-types" element={<Navigate to="/platform-types" replace />} />
+              <Route path="platform-types" element={<Navigate to="/platform-types/asset-types" replace />} />
               <Route path="seal-agent" element={<SealAgentSettings />} />
               <Route
                 path="azure-iot-edge"
@@ -137,8 +137,6 @@ export default function App() {
                 path="container-registries"
                 element={<SettingsPlaceholder title="Container Registries" description="Registries used to pull container images for deployments." />}
               />
-              <Route path="templates" element={<Navigate to="/platform-types/templates" replace />} />
-              <Route path="platform-types" element={<PlatformTypesSettings />} />
               <Route path="templates" element={<TemplatesSettings />} />
               <Route path="extensions" element={<Outlet />}>
                 <Route index element={<ExtensionsSettings />} />

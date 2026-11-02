@@ -5,8 +5,10 @@ const SETTINGS_TABS = [
   { label: "Azure IoT Edge", path: "azure-iot-edge" },
   { label: "SEALMAN EMS", path: "sealman-ems" },
   { label: "Container Registries", path: "container-registries" },
+  { label: "Templates", path: "templates" },
+  { label: "Extensions", path: "extensions" },
 ];
 
 export default function SettingsLayout() {
-  return <SectionLayout title="Platform Configuration" tabs={SETTINGS_TABS} />;
+  return <SectionLayout tabs={SETTINGS_TABS} />;
 }

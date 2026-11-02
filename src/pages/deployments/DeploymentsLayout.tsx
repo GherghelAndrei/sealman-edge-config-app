@@ -6,5 +6,5 @@ const DEPLOYMENT_TABS = [
 ];
 
 export default function DeploymentsLayout() {
-  return <SectionLayout title="Deployments" tabs={DEPLOYMENT_TABS} />;
+  return <SectionLayout tabs={DEPLOYMENT_TABS} />;
 }

@@ -8,5 +8,5 @@ const AUTHORIZATION_TABS = [
 ];
 
 export default function Authorization() {
-  return <SectionLayout title="Authorization" tabs={AUTHORIZATION_TABS} />;
+  return <SectionLayout tabs={AUTHORIZATION_TABS} />;
 }

@@ -4,7 +4,6 @@ import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
 
 import SignOutButton from "../Auth/SignOutButton";
-import HalfManHalfSeal from "./HalfManHalfSeal";
 import logo from "../../assets/sealman_logo.png";
 import { useAuth } from "@/auth";
 import { Button } from "@/components/ui/button";
@@ -26,7 +25,6 @@ export default function AppHeader() {
     <header className="relative z-10 flex h-14 shrink-0 items-center justify-between border-b border-blue-100 bg-linear-to-r from-white via-blue-50/60 to-blue-100/70 px-4 shadow-sm">
       <div className="flex items-center gap-6">
         <img className="h-10 w-auto max-w-full object-contain" src={logo} alt="Sealman IoT" />
-        <HalfManHalfSeal />
       </div>
 
       <div className="flex items-center gap-1">
