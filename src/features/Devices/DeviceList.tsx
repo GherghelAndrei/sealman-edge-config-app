@@ -106,7 +106,7 @@ export default function DeviceList() {
   useEffect(() => {
     setGlobalFilter("");
     setColumnFiltersStore([]);
-  }, []);
+  }, [setColumnFiltersStore, setGlobalFilter]);
 
   const { isLoading, isError, data, error } = useGetDevices();
   const { fields: metadataFields } = useDeviceMetadataFields();
@@ -173,11 +173,6 @@ export default function DeviceList() {
     // whether it's shown as a column) - not the per-field meta:* columns or Status/Edge Runtime.
     getColumnCanGlobalFilter: (column) => column.id === "deviceId" || column.id === "metadataSearchIndex",
   });
-
-   useEffect(() => {
-    table.resetColumnFilters();
-    table.resetGlobalFilter();
-0;  }, []);
 
   const calculateDeviceOnlineFilter = () => {
     if (columnFilters.length === 1 && columnFilters[0].id === "onlineStatus") {

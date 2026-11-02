@@ -20,6 +20,11 @@ export default function DebouncedInput({
   Omit<React.InputHTMLAttributes<HTMLInputElement>, "onChange">) {
   const [value, setValue] = useState(initialValue);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     setValue(initialValue);
@@ -27,11 +32,11 @@ export default function DebouncedInput({
 
   useEffect(() => {
     timeoutRef.current = setTimeout(() => {
-      onChange(value);
+      onChangeRef.current(value);
     }, debounce);
 
     return () => clearTimeout(timeoutRef.current);
-  }, [value, debounce, onChange]);
+  }, [value, debounce]);
 
   const handleClear = () => {
     clearTimeout(timeoutRef.current);
