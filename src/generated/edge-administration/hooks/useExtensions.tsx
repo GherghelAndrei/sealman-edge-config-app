@@ -1,13 +1,32 @@
-import { edgeApi } from "../api"
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/auth";
+import { isForbidden } from "@/lib/errors";
+import { client, edgeApi } from "../api";
 
 export function useListExtensions() {
-    return edgeApi.useQuery("get", "/extensions")
+    const { user, isAuthenticated } = useAuth();
+    return useQuery({
+        queryKey: ["get", "/extensions", user?.iss, user?.sub],
+        queryFn: async ({ signal }) => {
+            const { data } = await client.GET("/extensions", { signal });
+            return data;
+        },
+        enabled: query => isAuthenticated && !isForbidden(query.state.error),
+        gcTime: 0,
+    });
 }
 
 export function useGetExtension(name: string) {
-    return edgeApi.useQuery("get", "/extensions/{name}", {
-        params: { path: { name } },
-    })
+    const { user, isAuthenticated } = useAuth();
+    return useQuery({
+        queryKey: ["get", "/extensions/{name}", { params: { path: { name } } }, user?.iss, user?.sub],
+        queryFn: async ({ signal }) => {
+            const { data } = await client.GET("/extensions/{name}", { params: { path: { name } }, signal });
+            return data;
+        },
+        enabled: query => isAuthenticated && Boolean(name) && !isForbidden(query.state.error),
+        gcTime: 0,
+    });
 }
 
 export function useGetExtensionSchema() {
@@ -15,7 +34,7 @@ export function useGetExtensionSchema() {
 }
 
 export function useRegisterExtension() {
-    return edgeApi.useMutation("post", "/extensions")
+    return edgeApi.useMutation("post", "/extensions", { gcTime: 0 })
 }
 
 export function useReplaceExtension() {
@@ -44,5 +63,26 @@ export function useCheckExtensionHealth() {
 }
 
 export function useRotateExtensionInternalKey() {
-    return edgeApi.useMutation("post", "/extensions/{name}/internal-key/rotate")
+    return edgeApi.useMutation("post", "/extensions/{name}/internal-key/rotate", { gcTime: 0 })
+}
+
+export function useListExtensionDeviceKeys(name: string, enabled: boolean) {
+    const { user, isAuthenticated } = useAuth();
+    return useQuery({
+        queryKey: ["get", "/extensions/{name}/device-keys", name, user?.iss, user?.sub],
+        queryFn: async ({ signal }) => {
+            const { data } = await client.GET("/extensions/{name}/device-keys", { params: { path: { name } }, signal });
+            return data;
+        },
+        enabled: query => isAuthenticated && enabled && Boolean(name) && !isForbidden(query.state.error),
+        gcTime: 0,
+    });
+}
+
+export function useIssueExtensionDeviceKey() {
+    return edgeApi.useMutation("post", "/extensions/{name}/device-keys", { gcTime: 0 });
+}
+
+export function useRevokeExtensionDeviceKey() {
+    return edgeApi.useMutation("delete", "/extensions/{name}/device-keys/{device_id}");
 }

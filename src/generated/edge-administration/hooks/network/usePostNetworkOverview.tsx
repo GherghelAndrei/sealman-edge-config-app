@@ -9,6 +9,7 @@ export type MappedPort = components["schemas"]["MappedPort"]
 interface props {
   deviceId: string
   body: NetworkScan
+  signal?: AbortSignal
 }
 
 export default function usePostNetworkOverview() {
@@ -18,8 +19,9 @@ export default function usePostNetworkOverview() {
     meta: { skipGlobalInvalidate: true },
   })
 
-  const mutateAsync = ({ deviceId, body }: props) => mutation.mutateAsync({
+  const mutateAsync = ({ deviceId, body, signal }: props) => mutation.mutateAsync({
     body,
+    signal,
     params: {
       path: {
         device: deviceId

@@ -20,4 +20,8 @@ describe("isExtensionsDisabledError", () => {
       "upstreams.catalog.http.base_url: Value error, host is not allowed",
     ]);
   });
+
+  it("shows a basic denial instead of backend detail on 403", () => {
+    expect(extensionErrorMessages(new ApiError("Access denied", 403), "Fallback")).toEqual(["Not permitted"]);
+  });
 });

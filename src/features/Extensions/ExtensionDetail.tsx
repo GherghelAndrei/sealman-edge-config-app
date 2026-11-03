@@ -11,8 +11,6 @@ import {
   Pencil,
   RefreshCcw,
   AlertCircle,
-  Copy,
-  Check,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,33 +49,45 @@ import { HttpMethodBadge } from "./HttpMethodBadge";
 import { Input } from "@/components/ui/input";
 import { ValidationModeBadge } from "./ValidationModeBadge";
 import { useExtensionHealth } from "./useExtensionHealth";
+import { usePermissions } from "@/features/authorization/permissions/use-permissions";
+import { isForbidden } from "@/lib/errors";
+import { extensionErrorMessages } from "./extensionErrors";
+import DeviceKeysCard from "./DeviceKeysCard";
+import { OneTimeKey } from "./OneTimeKeyDialog";
 
 const GuardedButton = withPermissionRequiredTooltip(Button);
 
 export default function ExtensionDetail() {
+  const { name } = useParams();
+  const { hasPermission: canRegister } = usePermissions({ permissionKey: PERMISSION_KEYS.EXTENSION_REGISTER });
+  const { hasPermission: canDeregister } = usePermissions({ permissionKey: PERMISSION_KEYS.EXTENSION_DEREGISTER });
+  return <ExtensionDetailContent key={`${name}:${canRegister}:${canDeregister}`} canRegister={canRegister} canDeregister={canDeregister} />;
+}
+
+function ExtensionDetailContent({ canRegister, canDeregister }: { canRegister: boolean; canDeregister: boolean }) {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: extension, isLoading, isError } = useGetExtension(name ?? "");
+  const { data: extension, isLoading, isError, error } = useGetExtension(name ?? "");
   const enableExtension = useEnableExtension();
   const disableExtension = useDisableExtension();
   const deleteExtension = useDeleteExtension();
   const rotateKey = useRotateExtensionInternalKey();
-  const health = useExtensionHealth(name ?? "", extension?.enabled ?? false, extension?.upstreams);
+  const health = useExtensionHealth(name ?? "", !isError && (extension?.enabled ?? false), extension?.upstreams);
 
   const [deregisterOpen, setDeregisterOpen] = useState(false);
   const [deregisterConfirmText, setDeregisterConfirmText] = useState("");
   const [rotateOpen, setRotateOpen] = useState(false);
   const [rotatedKey, setRotatedKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["/extensions"] });
-    queryClient.invalidateQueries({ queryKey: ["/extensions/{name}", { params: { path: { name } } }] });
+    queryClient.invalidateQueries({ queryKey: ["get", "/extensions"] });
+    queryClient.invalidateQueries({ queryKey: ["get", "/extensions/{name}", { params: { path: { name } } }] });
   }
 
   async function handleToggleEnabled() {
+    if (extension?.enabled ? !canDeregister : !canRegister) { toast.error("Not permitted"); return; }
     if (!name) return;
     try {
       if (extension?.enabled) {
@@ -89,38 +99,35 @@ export default function ExtensionDetail() {
       }
       invalidate();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to change extension state");
+      toast.error(extensionErrorMessages(e, "Failed to change extension state")[0]);
     }
   }
 
   async function handleDeregister() {
+    if (!canDeregister) { toast.error("Not permitted"); return; }
     if (!name) return;
     try {
       await deleteExtension.mutateAsync({ params: { path: { name } } });
       toast.success(`Extension "${name}" deregistered`);
       navigate("..");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to deregister extension");
+      toast.error(extensionErrorMessages(e, "Failed to deregister extension")[0]);
       setDeregisterOpen(false);
     }
   }
 
   async function handleRotateKey() {
+    if (!canRegister) { toast.error("Not permitted"); return; }
     if (!name) return;
     try {
       const result = await rotateKey.mutateAsync({ params: { path: { name } } });
       setRotatedKey(result.internal_key);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to rotate internal key");
+      toast.error(extensionErrorMessages(e, "Failed to rotate internal key")[0]);
       setRotateOpen(false);
+    } finally {
+      rotateKey.reset();
     }
-  }
-
-  function copyKey() {
-    if (!rotatedKey) return;
-    navigator.clipboard.writeText(rotatedKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
   }
 
   const backButton = (
@@ -147,7 +154,7 @@ export default function ExtensionDetail() {
         {backButton}
         <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground py-12">
           <AlertCircle className="h-8 w-8 text-destructive opacity-60" />
-          <p className="text-sm">Failed to load extension.</p>
+          <p className="text-sm">{isForbidden(error) ? "Not permitted" : "Failed to load extension."}</p>
         </div>
       </div>
     );
@@ -278,6 +285,8 @@ export default function ExtensionDetail() {
         </div>
       </div>
 
+      {extension.routes.some((route) => route.visibility === "device") && <DeviceKeysCard name={extension.name} />}
+
       <AlertDialog
         open={deregisterOpen}
         onOpenChange={(o) => { setDeregisterOpen(o); if (!o) setDeregisterConfirmText(""); }}
@@ -313,7 +322,7 @@ export default function ExtensionDetail() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={rotateOpen} onOpenChange={(o) => { setRotateOpen(o); if (!o) setRotatedKey(null); }}>
+      <Dialog open={rotateOpen} onOpenChange={(o) => { if (rotateKey.isPending) return; setRotateOpen(o); if (!o) setRotatedKey(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rotate internal key</DialogTitle>
@@ -322,21 +331,16 @@ export default function ExtensionDetail() {
             </DialogDescription>
           </DialogHeader>
           {rotatedKey ? (
-            <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3">
-              <code className="text-xs break-all flex-1">{rotatedKey}</code>
-              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={copyKey}>
-                {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
+            <OneTimeKey secret={rotatedKey} />
           ) : (
             <p className="text-sm text-muted-foreground">Rotating will immediately invalidate the current key.</p>
           )}
           <DialogFooter>
             {rotatedKey ? (
-              <Button onClick={() => setRotateOpen(false)}>Done</Button>
+              <Button onClick={() => { setRotatedKey(null); setRotateOpen(false); }}>Done</Button>
             ) : (
               <>
-                <Button variant="outline" onClick={() => setRotateOpen(false)}>Cancel</Button>
+                <Button variant="outline" disabled={rotateKey.isPending} onClick={() => setRotateOpen(false)}>Cancel</Button>
                 <Button onClick={handleRotateKey} disabled={rotateKey.isPending}>
                   {rotateKey.isPending ? "Rotating…" : "Rotate key"}
                 </Button>

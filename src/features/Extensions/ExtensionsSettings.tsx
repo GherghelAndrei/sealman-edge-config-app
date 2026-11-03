@@ -10,6 +10,7 @@ import { ExtensionEnabledBadge } from "./ExtensionEnabledBadge";
 import { HealthDot } from "./HealthDot";
 import { useExtensionHealth } from "./useExtensionHealth";
 import { isExtensionsDisabledError } from "./extensionErrors";
+import { isForbidden } from "@/lib/errors";
 
 const GuardedButton = withPermissionRequiredTooltip(Button);
 
@@ -44,7 +45,7 @@ function ExtensionRow({ name, enabled, description, upstreamCount, routeCount, p
 
 export default function ExtensionsSettings() {
   const navigate = useNavigate();
-  const { data: extensions, isLoading, isError, error } = useListExtensions();
+  const { data: extensions, isLoading, isError, error, refetch } = useListExtensions();
   const extensionsDisabled = isError && isExtensionsDisabledError(error);
 
   return (
@@ -69,8 +70,9 @@ export default function ExtensionsSettings() {
           <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
             <AlertCircle className="h-5 w-5 text-destructive" />
             <span className="text-sm">
-              {extensionsDisabled ? "The extension subsystem is disabled." : "Failed to load extensions."}
+              {isForbidden(error) ? "Not permitted" : extensionsDisabled ? "The extension subsystem is disabled." : "Failed to load extensions."}
             </span>
+            {!extensionsDisabled && <Button variant="outline" size="sm" onClick={() => { void refetch(); }}>Retry</Button>}
           </div>
         ) : (
           <Table>

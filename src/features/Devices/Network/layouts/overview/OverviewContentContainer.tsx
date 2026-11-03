@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { WaterLoader } from "@/components/ui/water-loader";
 import { toast } from "react-toastify";
@@ -7,8 +7,6 @@ import { Centered } from "@/features/Devices/Network/components";
 import { useNetworkPageStore } from "@/features/Devices/Network/stores";
 import usePostDeviceNetworkDiscover, { ScanResult } from "@/generated/edge-administration/hooks/network/usePostDeviceNetworkDiscover";
 import usePostNetworkOverview, { NetworkOverview } from "@/generated/edge-administration/hooks/network/usePostNetworkOverview";
-import useGetNetworkScanPorts from "@/generated/edge-administration/hooks/network/useGetNetworkScanPorts";
-import useGetNetworkScanRange from "@/generated/edge-administration/hooks/network/useGetNetworkScanRange";
 import usePostDeviceScanPorts from "@/generated/edge-administration/hooks/network/usePostDeviceScanPorts";
 import { client } from "@/generated/edge-administration/api";
 import DiscoveredEndpointsCard from "./DiscoveredEndpointsCard";
@@ -23,6 +21,9 @@ import EndpointActions from "./EndpointActions";
 import DeviceGatewayCard from "@/features/Devices/Gateway/DeviceGatewayCard";
 import AssetsViewToggle from "./AssetsViewToggle";
 import { AssetsViewMode, loadViewMode, saveViewMode } from "./canvasLayout";
+import { useAuth } from "@/auth";
+import { isForbidden } from "@/lib/errors";
+import { ErrorState } from "@/components/ui/page-state";
 
 const BACKGROUND_REFRESH_INTERVAL_MS = 3000;
 
@@ -63,21 +64,82 @@ function excludeIpsCoveredByRanges(ips: string[], ranges: ScanNetworkRange[]): s
 // exactly that - the *last known* state, not necessarily the current one - it can lag behind
 // reality whenever the live scan can't run at all (e.g. the device has been unreachable via IoT
 // Hub for a while), since nothing updates these persisted statuses without a live scan.
-async function buildOfflineFallbackOverview(deviceId: string): Promise<NetworkOverview> {
-  const { data } = await client.GET("/{device}/network/last-known", { params: { path: { device: deviceId } } });
+async function buildOfflineFallbackOverview(deviceId: string, signal: AbortSignal): Promise<NetworkOverview> {
+  const { data } = await client.GET("/{device}/network/last-known", { params: { path: { device: deviceId } }, signal });
   return data ?? { scanDefinition: { networkDefinition: "0.0.0.0", subnetMask: 32, ports: [] }, endpoints: [] };
 }
 
 export default function OverviewContentContainer() {
   const deviceId = useNetworkPageStore((s) => s.deviceId);
+  const auth = useAuth();
+  const identity = JSON.stringify([auth.user?.iss, auth.user?.sub]);
+  const [attempt, setAttempt] = useState(0);
+  if (!auth.isAuthenticated) return null;
+  return (
+    <OverviewContent
+      key={`${identity}:${deviceId}:${attempt}`}
+      deviceId={deviceId}
+      contextKey={[identity, deviceId, attempt]}
+      onRetry={() => setAttempt((value) => value + 1)}
+    />
+  );
+}
 
-  const { data: catalogPorts, isLoading: isLoadingPorts, isError: isPortsError, refetch: refetchPorts } = useGetNetworkScanPorts(deviceId);
+function OverviewContent({ deviceId, contextKey, onRetry }: {
+  deviceId: string;
+  contextKey: readonly [string, string, number];
+  onRetry: () => void;
+}) {
+  const [denied, setDenied] = useState(false);
+  const stopped = useRef(false);
+  useEffect(() => {
+    stopped.current = false;
+    return () => { stopped.current = true; };
+  }, []);
+
+  function assertRunning(signal: AbortSignal) {
+    signal.throwIfAborted();
+    if (stopped.current) throw new DOMException("Network workflow stopped", "AbortError");
+  }
+
+  async function required<T>(signal: AbortSignal, request: () => Promise<T>): Promise<T> {
+    assertRunning(signal);
+    try {
+      const result = await request();
+      assertRunning(signal);
+      return result;
+    } catch (error) {
+      if (!signal.aborted && !stopped.current && isForbidden(error)) {
+        stopped.current = true;
+        setDenied(true);
+      }
+      throw error;
+    }
+  }
+
+  const { data: catalogPorts, isLoading: isLoadingPorts, isError: isPortsError, refetch: refetchPorts } = useQuery({
+    queryKey: ["network-scan-ports", ...contextKey],
+    queryFn: ({ signal }) => required(signal, async () => {
+      const { data } = await client.GET("/{device}/network/scan-ports", { params: { path: { device: deviceId } }, signal });
+      return data;
+    }),
+    enabled: Boolean(deviceId) && !denied,
+    gcTime: 0,
+  });
   // The baseline scan range is derived server-side from this device's own configured endpoints'
   // IPs - see get_network_scan_range.py. `networkDefinition`/`subnetMask` are null when there's
   // no per-device evidence yet, but `suggestedIps` (endpoint types' default IPs, probed
   // individually, never persisted) can still be non-empty in that case. The whole response is
   // `undefined` only when there's truly nothing at all - no evidence and no type has a default.
-  const { data: scanRange, isLoading: isLoadingRange, isError: isRangeError, refetch: refetchRange } = useGetNetworkScanRange(deviceId);
+  const { data: scanRange, isLoading: isLoadingRange, isError: isRangeError, refetch: refetchRange } = useQuery({
+    queryKey: ["network-scan-range", ...contextKey],
+    queryFn: ({ signal }) => required(signal, async () => {
+      const { data } = await client.GET("/{device}/network/scan-range", { params: { path: { device: deviceId } }, signal });
+      return data;
+    }),
+    enabled: Boolean(deviceId) && !denied,
+    gcTime: 0,
+  });
   const { mutateAsync: discoverAsync } = usePostDeviceNetworkDiscover();
   const { mutateAsync: overviewAsync } = usePostNetworkOverview();
   const { mutateAsync: addDeviceScanPortsAsync } = usePostDeviceScanPorts();
@@ -124,26 +186,31 @@ export default function OverviewContentContainer() {
     ranges: ScanNetworkRange[],
     ips: string[],
     ports: number[],
+    signal: AbortSignal,
   ): Promise<NetworkOverview | null> {
+    assertRunning(signal);
     if (ranges.length === 0 && ips.length === 0) {
       // Nothing known/configured to scan yet - skip the network round-trip entirely and show
       // an empty result set instead of erroring (the user can add a range via Scan Network).
       return overviewAsync({
         deviceId,
+        signal,
         body: { scanResults: [], scanDefinition: { networkDefinition: "0.0.0.0", subnetMask: 32, ports } },
       });
     }
 
     const rangeScans = await Promise.all(
       ranges.map((r) =>
-        discoverAsync({ deviceId, body: { networkDefinition: r.networkDefinition, subnetMask: r.subnetMask, ports } })
+        discoverAsync({ deviceId, signal, body: { networkDefinition: r.networkDefinition, subnetMask: r.subnetMask, ports } })
       )
     );
 
+    assertRunning(signal);
     const ipScans = await Promise.all(
-      ips.map((ip) => discoverAsync({ deviceId, body: { networkDefinition: ip, subnetMask: 32, ports } }))
+      ips.map((ip) => discoverAsync({ deviceId, signal, body: { networkDefinition: ip, subnetMask: 32, ports } }))
     );
 
+    assertRunning(signal);
     const allScans = [...rangeScans, ...ipScans];
     const primaryScan = allScans.find((s) => s);
     if (!primaryScan) {
@@ -159,7 +226,7 @@ export default function OverviewContentContainer() {
       allScans.filter((s) => s && s !== primaryScan).map((s) => s!.payload.scanResults)
     );
 
-    return overviewAsync({ deviceId, body: { scanResults, scanDefinition: primaryScan.payload.scanDefinition } });
+    return overviewAsync({ deviceId, signal, body: { scanResults, scanDefinition: primaryScan.payload.scanDefinition } });
   }
 
   // The persisted baseline range (only present once there's real per-device evidence for it -
@@ -193,10 +260,11 @@ export default function OverviewContentContainer() {
   // concurrent fetches for the same query key and only ever has one fetch for this key in
   // flight at a time, which is what previously needed manual refs to enforce.
   const overviewQuery = useQuery({
-    queryKey: ["network-overview", deviceId, catalogPortsKey, scanRangeKey],
-    queryFn: () => runDiscoverAndOverview(baselineRanges, suggestedIps, catalogPorts ?? []),
-    enabled: Boolean(deviceId) && !isLoadingPorts && Boolean(catalogPorts) && !isLoadingRange,
-    refetchInterval: BACKGROUND_REFRESH_INTERVAL_MS,
+    queryKey: ["network-overview", ...contextKey, catalogPortsKey, scanRangeKey],
+    queryFn: ({ signal }) => required(signal, () => runDiscoverAndOverview(baselineRanges, suggestedIps, catalogPorts ?? [], signal)),
+    enabled: Boolean(deviceId) && !denied && !isPortsError && !isRangeError && !isLoadingPorts && Boolean(catalogPorts) && !isLoadingRange,
+    refetchInterval: denied ? false : BACKGROUND_REFRESH_INTERVAL_MS,
+    gcTime: 0,
   });
   const overview = overviewQuery.data ?? undefined;
 
@@ -207,30 +275,32 @@ export default function OverviewContentContainer() {
   // when the live scan errors, since a live scan that's simply empty right now (or hasn't
   // finished its first tick yet) shouldn't make already-configured endpoints disappear either.
   const offlineFallbackQuery = useQuery({
-    queryKey: ["network-offline-fallback", deviceId],
-    queryFn: () => buildOfflineFallbackOverview(deviceId),
-    enabled: Boolean(deviceId),
+    queryKey: ["network-offline-fallback", ...contextKey],
+    queryFn: ({ signal }) => required(signal, () => buildOfflineFallbackOverview(deviceId, signal)),
+    enabled: Boolean(deviceId) && !denied,
+    gcTime: 0,
   });
 
   // The one-time custom scan (Scan Network dialog) - `enabled` is derived from whether a custom
   // range/IPs are currently set, so setting them (via `handleConfirmScan`) automatically fires
   // this query without a manual `.refetch()` call racing the not-yet-committed state update.
   const extraScanQuery = useQuery({
-    queryKey: ["network-extra-scan", deviceId, extraRange, extraPorts, extraIps, catalogPortsKey],
-    queryFn: () => {
+    queryKey: ["network-extra-scan", ...contextKey, extraRange, extraPorts, extraIps, catalogPortsKey],
+    queryFn: ({ signal }) => required(signal, () => {
       const allPorts = [...new Set([...(catalogPorts ?? []), ...extraPorts])];
       const ranges = extraRange ? [extraRange] : [];
-      return runDiscoverAndOverview(ranges, excludeIpsCoveredByRanges(extraIps, ranges), allPorts);
-    },
-    enabled: Boolean(deviceId) && (extraRange !== null || extraIps.length > 0 || extraPorts.length > 0),
+      return runDiscoverAndOverview(ranges, excludeIpsCoveredByRanges(extraIps, ranges), allPorts, signal);
+    }),
+    enabled: Boolean(deviceId) && !denied && (extraRange !== null || extraIps.length > 0 || extraPorts.length > 0),
+    gcTime: 0,
   });
   const extraEndpoints = extraScanQuery.data?.endpoints ?? [];
 
   useEffect(() => {
-    if (extraScanQuery.isError) {
+    if (extraScanQuery.isError && !denied) {
       toast.error("Failed to scan the custom network range. Please try again.");
     }
-  }, [extraScanQuery.isError]);
+  }, [extraScanQuery.isError, denied]);
 
   // Only reflects the manual one-time scan (Scan Network dialog), not the recurring background
   // autoscan - the "Scan Network" button shouldn't animate every few seconds just because the
@@ -238,6 +308,7 @@ export default function OverviewContentContainer() {
   const isScanning = extraScanQuery.isFetching;
 
   const handleRefresh = () => {
+    if (stopped.current) return;
     overviewQuery.refetch();
     offlineFallbackQuery.refetch();
     // Keep the custom scan's results fresh too, so they don't go stale after e.g. assigning one
@@ -248,6 +319,7 @@ export default function OverviewContentContainer() {
   };
 
   const handleConfirmScan = async (newRange: ScanNetworkRange | null, newExtraPorts: number[], newExtraIps: string[]) => {
+    if (stopped.current) return;
     setExtraRange(newRange);
     setExtraIps(newExtraIps);
     if (newExtraPorts.length === 0) {
@@ -259,15 +331,22 @@ export default function OverviewContentContainer() {
     // future cycle, so it no longer needs to be tracked as a separate "extra" port here.
     try {
       await addDeviceScanPortsAsync({ deviceId, body: { ports: newExtraPorts } });
+      if (stopped.current) return;
       await refetchPorts();
+      if (stopped.current) return;
       setExtraPorts([]);
     } catch {
+      if (stopped.current) return;
       // Persisting failed - fall back to at least scanning them once, same as before this port
       // list was persisted server-side, rather than silently dropping them.
       toast.error("Failed to save the additional ports for this device. Scanning them once instead.");
       setExtraPorts(newExtraPorts);
     }
   };
+
+  if (denied) {
+    return <ErrorState title="Not permitted" onRetry={onRetry} />;
+  }
 
   // Checked before the scan-pipeline's own loading/error states, since the details pages fetch
   // their own data independently and shouldn't be blocked by those.

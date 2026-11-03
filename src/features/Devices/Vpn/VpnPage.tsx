@@ -12,12 +12,22 @@ import { endpointTitle, roleFieldKey } from "@/features/Devices/Network/layouts/
 import { endpointListKey } from "@/features/Devices/Network/layouts/overview/overviewMerge";
 import { Authorization } from "@/features/Devices/Network/smart_ems/layouts/Authorization";
 import { EdgeDeviceVPNCard } from "@/features/Devices/Network/smart_ems/layouts/EdgeDeviceVPNCard";
+import { useAuth } from "@/auth";
+import { isForbidden } from "@/lib/errors";
+import { ErrorState } from "@/components/ui/page-state";
 
 type VpnState = "connecting" | "connected";
 
 const MOCK_CONNECT_DURATION_MS = 1500;
 
 export default function VpnPage({ deviceId }: { deviceId: string }) {
+  const auth = useAuth();
+  const identity = JSON.stringify([auth.user?.iss, auth.user?.sub]);
+  if (!auth.isAuthenticated) return null;
+  return <VpnContent key={`${identity}:${deviceId}`} deviceId={deviceId} identity={identity} />;
+}
+
+function VpnContent({ deviceId, identity }: { deviceId: string; identity: string }) {
   const { data: endpointTypes } = useGetEndpointTypes();
   const [vpnStates, setVpnStates] = useState<Record<string, VpnState>>({});
   const timers = useRef<number[]>([]);
@@ -27,13 +37,14 @@ export default function VpnPage({ deviceId }: { deviceId: string }) {
     return () => pending.forEach((id) => window.clearTimeout(id));
   }, []);
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["vpn-endpoints", deviceId],
-    queryFn: async () => {
-      const { data } = await client.GET("/{device}/network/last-known", { params: { path: { device: deviceId } } });
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["vpn-endpoints", deviceId, identity],
+    queryFn: async ({ signal }) => {
+      const { data } = await client.GET("/{device}/network/last-known", { params: { path: { device: deviceId } }, signal });
       return data?.endpoints ?? [];
     },
-    enabled: Boolean(deviceId),
+    enabled: (query) => Boolean(deviceId) && !isForbidden(query.state.error),
+    gcTime: 0,
   });
 
   // Only endpoints that actually carry an IP address can be reached through a VPN.
@@ -50,33 +61,11 @@ export default function VpnPage({ deviceId }: { deviceId: string }) {
 
   const disconnect = (key: string) => {
     setVpnStates((prev) => {
-      const { [key]: _removed, ...rest } = prev;
-      return rest;
+      const next = { ...prev };
+      delete next[key];
+      return next;
     });
   };
-
-  if (isLoading) {
-    return (
-      <Centered>
-        <p className="flex items-center gap-2 text-muted-foreground">
-          <WaterLoader /> Loading endpoints...
-        </p>
-      </Centered>
-    );
-  }
-
-  if (isError) {
-    return (
-      <Centered>
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-sm text-destructive">Failed to load endpoints.</p>
-          <Button variant="outline" onClick={() => refetch()}>
-            Retry
-          </Button>
-        </div>
-      </Centered>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -93,7 +82,15 @@ export default function VpnPage({ deviceId }: { deviceId: string }) {
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-background">
-        {endpoints.length === 0 ? (
+        {isError ? (
+          <ErrorState title={isForbidden(error) ? "Not permitted" : "Failed to load endpoints"} onRetry={() => { void refetch(); }} />
+        ) : isLoading ? (
+          <Centered>
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <WaterLoader /> Loading endpoints...
+            </p>
+          </Centered>
+        ) : endpoints.length === 0 ? (
           <p className="p-4 text-sm text-muted-foreground">No endpoints with an IP address available.</p>
         ) : (
           <ul className="divide-y">

@@ -1535,6 +1535,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extensions/{name}/device-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List device keys (metadata only) */
+        get: operations["list_device_keys_extensions__name__device_keys_get"];
+        put?: never;
+        /**
+         * Issue a device key
+         * @description Issues (or replaces) the X-Device-Key one device uses for this extension's `device` routes. The device must exist. The raw key is only ever returned here.
+         */
+        post: operations["issue_device_key_extensions__name__device_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extensions/{name}/device-keys/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a device key */
+        delete: operations["revoke_device_key_extensions__name__device_keys__device_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3315,7 +3353,7 @@ export interface components {
              * @default public
              * @enum {string}
              */
-            visibility: "public" | "internal";
+            visibility: "public" | "internal" | "device";
             /** Required Action */
             required_action?: string | null;
             /**
@@ -3388,7 +3426,7 @@ export interface components {
              * @default public
              * @enum {string}
              */
-            visibility: "public" | "internal";
+            visibility: "public" | "internal" | "device";
             /** Required Action */
             required_action?: string | null;
             /**
@@ -4118,6 +4156,59 @@ export interface components {
             lan3: {
                 [key: string]: components["schemas"]["VlanConfig"];
             };
+        };
+        /** DeviceKeyInfo */
+        DeviceKeyInfo: {
+            /** Device Id */
+            device_id: string;
+            /** Module Id */
+            module_id?: string | null;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** DeviceKeyRequest */
+        DeviceKeyRequest: {
+            /** Device Id */
+            device_id: string;
+            /** Module Id */
+            module_id?: string | null;
+        };
+        /** DeviceKeyIssueResponse */
+        DeviceKeyIssueResponse: {
+            /** Device Id */
+            device_id: string;
+            /** Device Key */
+            device_key: string;
+        };
+        /** ExtensionRegistered */
+        ExtensionRegistered: {
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: 1;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Upstreams */
+            upstreams: {
+                [key: string]: components["schemas"]["HttpUpstreamDetail"] | components["schemas"]["IotedgeUpstreamDetail"];
+            };
+            /** Actions */
+            actions?: components["schemas"]["ActionSpec"][];
+            /** Routes */
+            routes: components["schemas"]["RouteDetail"][];
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Internal Key */
+            internal_key: string;
         };
     };
     responses: never;
@@ -7889,7 +7980,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ExtensionDetail"];
+                    "application/json": components["schemas"]["ExtensionRegistered"];
                 };
             };
             /** @description Validation Error */
@@ -8132,6 +8223,102 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InternalKeyRotateResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_device_key_extensions__name__device_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceKeyIssueResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_device_keys_extensions__name__device_keys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceKeyInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_device_key_extensions__name__device_keys__device_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

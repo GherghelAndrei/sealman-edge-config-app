@@ -55,6 +55,20 @@ Set `VITE_AUTHENTICATION_PROVIDER` to `keycloak` (default) or `entra` and fill i
 | `VITE_ENTRA_ID_REDIRECT_URI` | entra | Redirect URL after login (e.g., `http://localhost:3000`). |
 | `VITE_API_SCOPES` | entra | Comma-separated OAuth scopes requested when acquiring API tokens. |
 
+### API access errors
+
+Assets and the VPN endpoint list show "Not permitted" after an API 403 and hide previously loaded restricted results. The affected workflow stops automatic requests until an explicit retry or a device/account change. Gateway VPN controls remain available independently.
+
+Applications stops config-status polling after HTTP 400 or 403; retry explicitly or correct the module IDs to resume. System module IDs such as `$edgeAgent` and `$edgeHub` are sent unchanged. If saving additional scan ports is denied, the custom scan can still use those ports temporarily without retrying the save in the background.
+
+### Extension credentials
+
+Platform Configuration > Extensions requires `extension.read`. Registration, editing, internal-key rotation, and device-key issue/revoke require `extension.register`; disabling/deregistering requires `extension.deregister`. The API remains authoritative if access changes.
+
+Registration displays `internal_key` once when returned by the API. Internal routes use `X-Internal-Key`; rotation invalidates the previous key immediately. HTTP routes with `device` visibility use per-device `X-Device-Key` credentials on the field-ingress API. Their detail page lists key metadata and allows issuing/replacing or confirming revocation of a key. Optional module IDs are metadata, not an authentication restriction.
+
+Copy newly issued credentials before closing their dialogs: they are not saved to browser storage or query caches, and cannot be retrieved by the UI later. Device-key endpoints and registration-time keys require the corresponding local API changes; the published older API does not provide them.
+
 ## Running in Docker
 
 ```bash

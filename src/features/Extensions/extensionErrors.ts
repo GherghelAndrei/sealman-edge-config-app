@@ -1,4 +1,5 @@
 import { ApiError } from "@/generated/edge-administration/api";
+import { isForbidden } from "@/lib/errors";
 
 export function isExtensionsDisabledError(error: unknown): error is ApiError {
   return error instanceof ApiError && error.statusCode === 404;
@@ -10,6 +11,7 @@ interface ValidationErrorDetail {
 }
 
 export function extensionErrorMessages(error: unknown, fallback: string): string[] {
+  if (isForbidden(error)) return ["Not permitted"];
   if (error instanceof ApiError && Array.isArray(error.details)) {
     const messages = error.details.flatMap((detail: ValidationErrorDetail) => {
       if (typeof detail.message !== "string") return [];

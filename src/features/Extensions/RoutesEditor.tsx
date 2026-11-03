@@ -139,8 +139,12 @@ export function RoutesEditor({ routes, upstreams, actions, onChange }: RoutesEdi
                       <SelectContent>
                         <SelectItem value="public">public</SelectItem>
                         <SelectItem value="internal">internal</SelectItem>
+                        <SelectItem value="device">device (X-Device-Key)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Public uses user JWT permissions; internal uses X-Internal-Key; device uses X-Device-Key on the field-ingress API (HTTP upstreams only).
+                    </p>
                   </div>
                 </div>
 

@@ -12,6 +12,8 @@ export interface UsePermissionsOutput {
   hasPermission: boolean;
   noPermissionsMessage?: string;
   isLoading?: boolean;
+  isError?: boolean;
+  error?: Error | null;
 }
 
 export interface UsePermissionsOptions {
@@ -29,15 +31,16 @@ export function usePermissions({
   permissionKey
 }: UsePermissionsOptions): UsePermissionsOutput {
   const auth = useAuth();
-  const { data, isLoading } = useQuery<PermissionsResponse>({
-    queryKey: ["permissions", deviceId ?? "platform"],
-    queryFn: async () => mockPermissions ? authPermissionsResponseBody : edgeConfigApi.getPermissions(deviceId),
+  const { data, isLoading, isError, error } = useQuery<PermissionsResponse>({
+    queryKey: ["permissions", deviceId ?? "platform", auth.user?.iss, auth.user?.sub],
+    queryFn: async ({ signal }) => mockPermissions ? authPermissionsResponseBody : edgeConfigApi.getPermissions(deviceId, signal),
     enabled: mockPermissions || auth.isAuthenticated,
+    gcTime: 0,
   });
 
-  const hasPermission = data?.permissions?.includes(permissionKey) ?? false;
+  const hasPermission = !isError && (data?.permissions?.includes(permissionKey) ?? false);
   const noPermissionsMessage = !hasPermission ? noPermissionForActionMessage({permissionKey, deviceId: deviceId!}) : undefined;
-  return { hasPermission: hasPermission, noPermissionsMessage, isLoading: isLoading };
+  return { hasPermission, noPermissionsMessage, isLoading, isError, error };
 }
 
 const authPermissionsResponseBody = {

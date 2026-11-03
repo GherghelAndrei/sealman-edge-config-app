@@ -73,13 +73,13 @@ const getSmartEmsStatus = async (deviceId: string | undefined) => {
   return data;
 }
 
-const getModules = async (deviceId: string | undefined) => {
-  const { data } = await edgeConfigApiInstance.get(`/${deviceId}/modules`);
+const getModules = async (deviceId: string | undefined, signal?: AbortSignal) => {
+  const { data } = await edgeConfigApiInstance.get(`/${deviceId}/modules`, { signal });
   return data;
 }
 
-const getConfigStatus = async (deviceId: string | undefined, payload: any) => {
-  const { data } = await edgeConfigApiInstance.post(`/${deviceId}/config/status`, payload);
+const getConfigStatus = async (deviceId: string | undefined, payload: { modules?: string[] }, signal?: AbortSignal) => {
+  const { data } = await edgeConfigApiInstance.post(`/${deviceId}/config/status`, payload, { signal });
   return data;
 }
 
@@ -198,11 +198,11 @@ const postInfluxBucketCreate = async (deviceId: string | undefined) => {
   return data;
 }
 
-const getPermissions = async (deviceId: string | undefined) => {
+const getPermissions = async (deviceId: string | undefined, signal?: AbortSignal) => {
   const resourceType = deviceId ? "device" : "platform";
   const url = `/auth/permissions/${resourceType}`;
   const params = deviceId ? { device_id: deviceId } : {};
-  const { data } = await edgeConfigApiInstance.get(url, { params });
+  const { data } = await edgeConfigApiInstance.get(url, { params, signal });
   return data;
 }
 

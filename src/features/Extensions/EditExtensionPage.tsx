@@ -11,12 +11,16 @@ import { ExtensionFormFields } from "./ExtensionFormFields";
 import { extensionErrorMessages } from "./extensionErrors";
 import { draftFromRegistration, draftToRegistration, emptyDraft, type ExtensionFormDraft } from "./extensionFormTypes";
 import { downloadDraftAsManifest } from "./exportManifest";
+import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
+import { usePermissions } from "@/features/authorization/permissions/use-permissions";
+import { isForbidden } from "@/lib/errors";
 
 export default function EditExtensionPage() {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
-  const { data: extension, isLoading, isError } = useGetExtension(name ?? "");
+  const { data: extension, isLoading, isError, error } = useGetExtension(name ?? "");
   const replaceExtension = useReplaceExtension();
+  const { hasPermission: canRegister } = usePermissions({ permissionKey: PERMISSION_KEYS.EXTENSION_REGISTER });
 
   const [draft, setDraft] = useState<ExtensionFormDraft>(emptyDraft());
   const [errors, setErrors] = useState<string[]>([]);
@@ -49,13 +53,14 @@ export default function EditExtensionPage() {
         {backButton}
         <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground py-12">
           <AlertCircle className="h-8 w-8 text-destructive opacity-60" />
-          <p className="text-sm">Failed to load extension.</p>
+          <p className="text-sm">{isForbidden(error) ? "Not permitted" : "Failed to load extension."}</p>
         </div>
       </div>
     );
   }
 
   async function handleSubmit() {
+    if (!canRegister) { setErrors(["Not permitted"]); return; }
     if (!name) return;
     let result;
     try {
@@ -135,7 +140,7 @@ export default function EditExtensionPage() {
         )}
 
         <CardFooter className="justify-end gap-2 border-t pt-6">
-          <Button type="button" onClick={handleSubmit} disabled={replaceExtension.isPending}>
+          <Button type="button" onClick={handleSubmit} disabled={!canRegister || replaceExtension.isPending}>
             {replaceExtension.isPending ? "Saving…" : "Save changes"}
           </Button>
         </CardFooter>

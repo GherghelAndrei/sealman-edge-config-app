@@ -1,5 +1,6 @@
 import {
   draftToRegistration,
+  draftFromRegistration,
   emptyDraft,
   emptyRoute,
   emptyUpstream,
@@ -75,5 +76,23 @@ describe("extension manifest form contract", () => {
 
     expect(result.registration).toBeUndefined();
     expect(result.errors.some((error) => error.includes('unsupported HTTP method "TRACE"'))).toBe(true);
+  });
+
+  it("preserves device visibility through import and export", () => {
+    const draft = validDraft();
+    draft.routes[0].visibility = "device";
+    const result = draftToRegistration(draft);
+    expect(result.errors).toEqual([]);
+    expect(result.registration?.routes[0].visibility).toBe("device");
+    expect(draftFromRegistration(result.registration!).routes[0].visibility).toBe("device");
+  });
+
+  it("does not allow device routes to target IoT Edge upstreams", () => {
+    const draft = validDraft();
+    draft.routes[0].visibility = "device";
+    draft.upstreams[0].type = "iotedge";
+    draft.upstreams[0].module_name = "test-module";
+    draft.routes[0].iotedge_method_name = "test-method";
+    expect(draftToRegistration(draft).errors).toContainEqual(expect.stringContaining("device routes require an HTTP upstream"));
   });
 });

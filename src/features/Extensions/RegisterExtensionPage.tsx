@@ -10,6 +10,9 @@ import { ExtensionFormFields } from "./ExtensionFormFields";
 import { extensionErrorMessages } from "./extensionErrors";
 import { draftFromRegistration, draftToRegistration, emptyDraft, type ExtensionFormDraft } from "./extensionFormTypes";
 import type { ExtensionRegistration } from "./types";
+import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
+import { usePermissions } from "@/features/authorization/permissions/use-permissions";
+import { OneTimeKeyDialog } from "./OneTimeKeyDialog";
 
 interface JsonImportStepProps {
   /** null means "no manifest to apply" (skip, or continue with an empty textarea). */
@@ -92,6 +95,8 @@ function JsonImportStep({ onContinue }: JsonImportStepProps) {
 export default function RegisterExtensionPage() {
   const navigate = useNavigate();
   const registerExtension = useRegisterExtension();
+  const { hasPermission: canRegister } = usePermissions({ permissionKey: PERMISSION_KEYS.EXTENSION_REGISTER });
+  const [internalKey, setInternalKey] = useState<string | null>(null);
   const [step, setStep] = useState<"import" | "form">("import");
   const [draft, setDraft] = useState<ExtensionFormDraft>(emptyDraft());
   const [errors, setErrors] = useState<string[]>([]);
@@ -109,6 +114,7 @@ export default function RegisterExtensionPage() {
   }
 
   async function handleSubmit() {
+    if (!canRegister) { setErrors(["Not permitted"]); return; }
     let result;
     try {
       result = draftToRegistration(draft);
@@ -122,14 +128,21 @@ export default function RegisterExtensionPage() {
     }
     setErrors([]);
     try {
-      await registerExtension.mutateAsync({ body: result.registration });
+      const registered = await registerExtension.mutateAsync({ body: result.registration });
       toast.success(`Extension "${result.registration.name}" registered`);
-      navigate("..");
+      if (registered.internal_key) setInternalKey(registered.internal_key);
+      else navigate("..");
     } catch (e) {
       const messages = extensionErrorMessages(e, "Failed to register extension");
       setErrors(messages);
       toast.error(messages[0]);
+    } finally {
+      registerExtension.reset();
     }
+  }
+
+  if (internalKey !== null) {
+    return <OneTimeKeyDialog title="Extension registered - internal key" secret={internalKey} onClose={() => { setInternalKey(null); navigate(".."); }} />;
   }
 
   return (
@@ -164,7 +177,7 @@ export default function RegisterExtensionPage() {
 
           <CardFooter className="justify-end gap-2 border-t pt-6">
             <Button type="button" variant="outline" onClick={() => setStep("import")}>Back to import</Button>
-            <Button type="button" onClick={handleSubmit} disabled={registerExtension.isPending}>
+            <Button type="button" onClick={handleSubmit} disabled={!canRegister || registerExtension.isPending}>
               {registerExtension.isPending ? "Registering…" : "Register"}
             </Button>
           </CardFooter>

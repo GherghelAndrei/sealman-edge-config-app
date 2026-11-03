@@ -4,7 +4,8 @@ import Badge, { BadgeColor } from "../../../components/Typography/Badge";
 import { ChevronRightIcon, CubeIcon, LinkIcon } from "@heroicons/react/24/outline";
 import { Heading } from "../../../components/Typography/Heading";
 import { ErrorState, LoadingState } from "@/components/ui/page-state";
-import { getErrorMessage } from "@/lib/errors";
+import { getErrorMessage, isForbidden, isTerminalConfigStatusError } from "@/lib/errors";
+import { useAuth } from "@/auth";
 import Modal, { ModalState } from "../../../components/Modal/Modal";
 import { Tab } from "@headlessui/react";
 import ModuleLogs from "./ModuleLogs";
@@ -12,24 +13,37 @@ import ModuleConfig from "./ModuleConfig";
 import DirectMethods from "./DirectMethods";
 import { edgeConfigApi } from "../../../api/edgeConfig/edgeConfigApi";
 import { useQuery } from "@tanstack/react-query";
-import { edgeConfigApiHooks, ModuleData } from "../../../api/edgeConfig/edgeConfigApiHooks";
+import type { ModuleData } from "../../../api/edgeConfig/edgeConfigApiHooks";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 
 export default function ModuleList() {
+  const { deviceId } = useParams();
+  const auth = useAuth();
+  const identity = JSON.stringify([auth.user?.iss, auth.user?.sub]);
+  if (!auth.isAuthenticated) return null;
+  return <ModuleListContent key={`${identity}:${deviceId}`} deviceId={deviceId} identity={identity} />;
+}
+
+function ModuleListContent({ deviceId, identity }: { deviceId?: string; identity: string }) {
   const [modalState, setModalState] = useState<ModalState>({
     isOpen: false,
     children: <></>
   });
-  const { deviceId } = useParams();
-  const { data: modules } = edgeConfigApiHooks.useGetModules(deviceId);
+  const { data: modules, error: modulesError, refetch: refetchModules } = useQuery<ModuleData[]>({
+    queryKey: ["getModules", deviceId, identity],
+    queryFn: ({ signal }) => edgeConfigApi.getModules(deviceId, signal),
+    enabled: (query) => Boolean(deviceId) && !isForbidden(query.state.error),
+    refetchInterval: (query) => isForbidden(query.state.error) ? false : 8000,
+    gcTime: 0,
+  });
+  const moduleNames = modules?.map((module) => module.moduleId);
 
-  const { isPending, isError, data: moduleData, error: statusError} = useQuery<ModuleData[], Error, ModuleData[]>({
-    queryKey: ['getConfigStatus', deviceId, modules],
-    queryFn: async () => {
-      const moduleNames = modules?.map((module) => module.moduleId);
-      const configStatus = await edgeConfigApi.getConfigStatus(deviceId, { modules: moduleNames });
-      const moduleData: any = modules?.map((module) => {
+  const { isPending, isError, data: moduleData, error: statusError, refetch } = useQuery({
+    queryKey: ['getConfigStatus', deviceId, identity, moduleNames],
+    queryFn: async ({ signal }) => {
+      const configStatus = await edgeConfigApi.getConfigStatus(deviceId, { modules: moduleNames }, signal);
+      return (modules ?? []).map((module) => {
         return {
           ...module,
           appMessage: configStatus[module.moduleId]?.appMessage || undefined,
@@ -39,14 +53,15 @@ export default function ModuleList() {
           reportedConfId: configStatus[module.moduleId]?.reportedConfId || undefined
         }
       });
-      return moduleData;
     },
-    enabled: !!modules,
-    refetchInterval: 5000,
+    enabled: (query) => Boolean(deviceId && modules) && !modulesError && !isTerminalConfigStatusError(query.state.error),
+    refetchInterval: (query) => isTerminalConfigStatusError(query.state.error) ? false : 5000,
+    gcTime: 0,
   });
 
+  if (modulesError) return <ErrorState title={isForbidden(modulesError) ? "Not permitted" : "Could not load the modules"} message={getErrorMessage(modulesError)} onRetry={() => { void refetchModules(); }} />;
   if (isPending) return <LoadingState label="Loading modules..." />
-  if (isError) return <ErrorState title="Could not load the modules" message={getErrorMessage(statusError)} />
+  if (isError) return <ErrorState title={isForbidden(statusError) ? "Not permitted" : "Could not load the modules"} message={getErrorMessage(statusError)} onRetry={() => { void refetch(); }} />
 
   const moduleRows = moduleData.map((module, index) => (
     <TableRow className="cursor-pointer" onClick={() => setModalState({

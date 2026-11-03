@@ -38,7 +38,7 @@ export interface RouteDraft {
   tags: string;
   deprecated: boolean;
   status_code: string;
-  visibility: "public" | "internal";
+  visibility: RouteSpec["visibility"];
   required_action: string;
   scoped: boolean;
   scope_param: string;
@@ -308,6 +308,9 @@ export function draftToRegistration(draft: ExtensionFormDraft): DraftConversionR
     }
 
     const upstreamSpec = upstreams[r.upstream];
+    if (r.visibility === "device" && upstreamSpec?.type !== "http") {
+      errors.push(`${label}: device routes require an HTTP upstream.`);
+    }
     const upstreamPath = upstreamSpec?.type === "http"
       ? r.upstream_path.trim() || r.path.trim()
       : null;

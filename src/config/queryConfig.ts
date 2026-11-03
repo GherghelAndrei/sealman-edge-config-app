@@ -1,5 +1,5 @@
 import { MutationCache, QueryClient, QueryClientConfig } from "@tanstack/react-query";
-import { AxiosError } from 'axios';
+import { getHttpStatus } from "@/lib/errors";
 
 declare module "@tanstack/react-query" {
   interface Register {
@@ -12,10 +12,8 @@ declare module "@tanstack/react-query" {
 }
 
 const retryFunction = (failureCount: number, error: unknown) => {
-  if (error instanceof AxiosError && error.response) {
-    if (error.response.status >= 400 && error.response.status < 500)  // Don't retry client errors
-    return false;
-  }
+  const status = getHttpStatus(error);
+  if (status !== undefined && status >= 400 && status < 500) return false;
   if (failureCount > 1)
     return false;
   return true;

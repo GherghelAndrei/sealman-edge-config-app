@@ -7,6 +7,7 @@ export type ScanResult = components["schemas"]["EndpointStatus"]
 interface props {
   deviceId: string
   body: NetworkDiscover
+  signal?: AbortSignal
 }
 
 export default function usePostDeviceNetworkDiscover() {
@@ -17,8 +18,9 @@ export default function usePostDeviceNetworkDiscover() {
     meta: { skipGlobalInvalidate: true },
   })
 
-  const mutateAsync = ({deviceId, body}: props ) => mutation.mutateAsync({
+  const mutateAsync = ({deviceId, body, signal}: props ) => mutation.mutateAsync({
     body,
+    signal,
     params: {
       path: {
         device: deviceId
