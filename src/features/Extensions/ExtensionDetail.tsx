@@ -54,6 +54,7 @@ import { isForbidden } from "@/lib/errors";
 import { extensionErrorMessages } from "./extensionErrors";
 import DeviceKeysCard from "./DeviceKeysCard";
 import { OneTimeKey } from "./OneTimeKeyDialog";
+import { isSupportedOutlet } from "./outlets/outlets";
 
 const GuardedButton = withPermissionRequiredTooltip(Button);
 
@@ -286,6 +287,44 @@ function ExtensionDetailContent({ canRegister, canDeregister }: { canRegister: b
       </div>
 
       {extension.routes.some((route) => route.visibility === "device") && <DeviceKeysCard name={extension.name} />}
+
+      {extension.ui && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">UI</h3>
+          <div className="border rounded-lg overflow-hidden bg-card">
+            <div className="px-4 py-3 text-sm space-y-1 border-b">
+              <div><span className="text-muted-foreground">Entry: </span><span className="font-mono text-xs">{extension.ui.entry}</span></div>
+              <div><span className="text-muted-foreground">Remote name: </span><span className="font-mono text-xs">{extension.ui.remoteName}</span></div>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Target</TableHead>
+                  <TableHead>Placement</TableHead>
+                  <TableHead>Label</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {extension.ui.contributions.map((c, i) => (
+                  <TableRow key={`${c.target}-${c.placement}-${i}`}>
+                    <TableCell className="font-mono text-xs">{c.target}</TableCell>
+                    <TableCell className="font-mono text-xs">{c.placement}</TableCell>
+                    <TableCell>{c.label}</TableCell>
+                    <TableCell>
+                      {!isSupportedOutlet(c.target, c.placement) && (
+                        <Badge variant="outline" className="text-amber-600 border-amber-600">
+                          Not available in this Sealman version
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       <AlertDialog
         open={deregisterOpen}

@@ -12,8 +12,13 @@ import ModuleLogs from "./ModuleLogs";
 import ModuleConfig from "./ModuleConfig";
 import DirectMethods from "./DirectMethods";
 import { edgeConfigApi } from "../../../api/edgeConfig/edgeConfigApi";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ModuleData } from "../../../api/edgeConfig/edgeConfigApiHooks";
+import ExtensionOutlet from "@/features/Extensions/outlets/ExtensionOutlet";
+import { useOutletUser } from "@/features/Extensions/outlets/useOutletUser";
+import useGetDeviceMetadata from "@/generated/edge-administration/hooks/device_metadata/useGetDeviceMetadata";
+import { usePermissions } from "@/features/authorization/permissions/use-permissions";
+import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 
@@ -30,6 +35,7 @@ function ModuleListContent({ deviceId, identity }: { deviceId?: string; identity
     isOpen: false,
     children: <></>
   });
+  const queryClient = useQueryClient();
   const { data: modules, error: modulesError, refetch: refetchModules } = useQuery<ModuleData[]>({
     queryKey: ["getModules", deviceId, identity],
     queryFn: ({ signal }) => edgeConfigApi.getModules(deviceId, signal),
@@ -59,13 +65,18 @@ function ModuleListContent({ deviceId, identity }: { deviceId?: string; identity
     gcTime: 0,
   });
 
+  const refreshModules = () => {
+    refetchModules();
+    queryClient.invalidateQueries({ queryKey: ["getConfigStatus", deviceId] });
+  };
+
   if (modulesError) return <ErrorState title={isForbidden(modulesError) ? "Not permitted" : "Could not load the modules"} message={getErrorMessage(modulesError)} onRetry={() => { void refetchModules(); }} />;
   if (isPending) return <LoadingState label="Loading modules..." />
   if (isError) return <ErrorState title={isForbidden(statusError) ? "Not permitted" : "Could not load the modules"} message={getErrorMessage(statusError)} onRetry={() => { void refetch(); }} />
 
   const moduleRows = moduleData.map((module, index) => (
     <TableRow className="cursor-pointer" onClick={() => setModalState({
-      children: <ModuleModal module={module} />,
+      children: <ModuleModal module={module} deviceId={deviceId ?? ""} refetchModules={refreshModules} />,
       title: <div className="flex items-center">{deviceId}<ChevronRightIcon className="w-4 h-4" /> {module.moduleName}</div>,
       isOpen: true
     })} key={index}>
@@ -201,7 +212,11 @@ function ModuleListContent({ deviceId, identity }: { deviceId?: string; identity
   );
 }
 
-function ModuleModal({ module }: { module: ModuleData }) {
+function ModuleModal({ module, deviceId, refetchModules }: { module: ModuleData; deviceId: string; refetchModules: () => unknown }) {
+  const user = useOutletUser();
+  const metadata = useGetDeviceMetadata(deviceId);
+  const deviceTypeId = metadata.data?.typeId ?? "";
+  const { hasPermission: canEdit } = usePermissions({ deviceId, permissionKey: PERMISSION_KEYS.DEVICE_MODULE_TWIN_CONFIG_WRITE });
   return (
     <Tab.Group className="h-full">
       <div className="h-full">
@@ -221,7 +236,17 @@ function ModuleModal({ module }: { module: ModuleData }) {
         </Tab.List>
         <Tab.Panels as="div" className="mt-4 h-full overflow-y-auto">
           <Tab.Panel className="h-full ">
-            <ModuleConfig moduleName={module.moduleId} appMessage={module.appMessage} moduleStatus={module.status} />
+            {metadata.isLoading ? (
+              <LoadingState label="Loading module configuration..." />
+            ) : (
+              <ExtensionOutlet
+                target="module"
+                placement="replace:config"
+                context={{ user, deviceId: deviceId ?? "", deviceTypeId, moduleId: module.moduleId, moduleType: module.moduleType, moduleVersion: module.version, canEdit }}
+                onDataChanged={refetchModules}
+                fallback={<ModuleConfig moduleName={module.moduleId} appMessage={module.appMessage} moduleStatus={module.status} />}
+              />
+            )}
           </Tab.Panel>
           <Tab.Panel className="h-full ">
             <DirectMethods moduleName={module.moduleId} />

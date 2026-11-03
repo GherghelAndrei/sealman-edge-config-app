@@ -4,6 +4,7 @@ import {
   Cog6ToothIcon,
   CpuChipIcon,
   HomeIcon,
+  PuzzlePieceIcon,
   RocketLaunchIcon,
   ShieldCheckIcon,
   Squares2X2Icon,
@@ -11,6 +12,8 @@ import {
 import { Fragment, useMemo } from "react";
 
 import { usePermissions } from "@/features/authorization/permissions/use-permissions";
+import { useNavContributions } from "@/features/Extensions/outlets/useNavContributions";
+import { useOutletUser } from "@/features/Extensions/outlets/useOutletUser";
 import { PERMISSION_KEYS } from "@/features/authorization/permissions/permission-keys";
 
 interface INavigation {
@@ -25,6 +28,9 @@ export default function SideNavigation() {
   const { hasPermission: hasAuthorizationReadPermission, isLoading: isPermissionsLoading } = usePermissions({
     permissionKey: PERMISSION_KEYS.PLATFORM_AUTHORIZATION_READ,
   });
+
+  const user = useOutletUser();
+  const extensionPages = useNavContributions("global", "page", { user });
 
   const navigation: INavigation[] = useMemo(() => {
     const items: INavigation[] = [
@@ -47,14 +53,18 @@ export default function SideNavigation() {
       separatorBefore: true,
     });
 
+    for (const page of extensionPages) {
+      items.push({ name: page.label, href: page.to, icon: PuzzlePieceIcon });
+    }
+
     return items;
-  }, [hasAuthorizationReadPermission, isPermissionsLoading]);
+  }, [hasAuthorizationReadPermission, isPermissionsLoading, extensionPages]);
 
   return (
     <aside className="flex h-full w-16 shrink-0 flex-col bg-[#0f1f47] lg:w-60">
       <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
         {navigation.map((item) => (
-          <Fragment key={item.name}>
+          <Fragment key={item.href}>
             {item.separatorBefore && <div className="my-2 border-t border-white/10" role="separator" />}
             <NavLink
               to={item.href}

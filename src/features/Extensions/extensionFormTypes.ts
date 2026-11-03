@@ -64,6 +64,8 @@ export interface ExtensionFormDraft {
   upstreams: UpstreamDraft[];
   actions: ActionDraft[];
   routes: RouteDraft[];
+  /** Carried through unchanged: the form has no UI editor, but PUT replaces the whole manifest. */
+  ui?: ExtensionRegistration["ui"];
 }
 
 export function emptyUpstream(): UpstreamDraft {
@@ -125,8 +127,8 @@ function upstreamToDraft(key: string, spec: UpstreamSpec): UpstreamDraft {
       key,
       type: "http",
       base_url: spec.base_url,
-      health_path: spec.health_path,
-      version_field: spec.version_field,
+      health_path: spec.health_path ?? "/health",
+      version_field: spec.version_field ?? "version",
       expected_version: spec.expected_version ?? "",
       module_name: "",
       health_device_query: "",
@@ -146,7 +148,7 @@ function upstreamToDraft(key: string, spec: UpstreamSpec): UpstreamDraft {
 }
 
 function queryParamToDraft(qp: QueryParamSpec): QueryParamDraft {
-  return { id: newId(), name: qp.name, type: qp.type, required: qp.required, description: qp.description ?? "" };
+  return { id: newId(), name: qp.name, type: qp.type ?? "string", required: qp.required ?? true, description: qp.description ?? "" };
 }
 
 /** Fills in the same defaults the backend applies, since hand-written/imported manifests
@@ -186,6 +188,7 @@ export function draftFromRegistration(reg: ExtensionRegistration): ExtensionForm
     upstreams: Object.entries(reg.upstreams ?? {}).map(([key, spec]) => upstreamToDraft(key, spec)),
     actions: (reg.actions ?? []).map((a) => ({ id: newId(), name: a.name, description: a.description ?? "" })),
     routes: (reg.routes ?? []).map(routeToDraft),
+    ...(reg.ui ? { ui: reg.ui } : {}),
   };
 }
 
@@ -372,6 +375,7 @@ export function draftToRegistration(draft: ExtensionFormDraft): DraftConversionR
       upstreams,
       actions,
       routes,
+      ...(draft.ui ? { ui: draft.ui } : {}),
     },
   };
 }
